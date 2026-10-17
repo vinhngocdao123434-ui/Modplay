@@ -1,0 +1,388 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <!-- Status / hint text (shown when idle or processing) -->
+    <LinearLayout
+        android:id="@+id/statusContainer"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:paddingHorizontal="24dp"
+        android:visibility="visible">
+
+        <TextView
+            android:id="@+id/tvStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:text="@string/status_idle"
+            android:textColor="?attr/ptTextHint"
+            android:textSize="24sp" />
+
+        <TextView
+            android:id="@+id/tvStatusHint"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:text="@string/status_hold_hint"
+            android:textColor="?attr/ptTextHint"
+            android:textSize="24sp"
+            android:layout_marginTop="28dp"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/tvLiveHint"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:textColor="?attr/ptTextHint"
+            android:textSize="24sp"
+            android:layout_marginTop="28dp"
+            android:visibility="gone" />
+
+    </LinearLayout>
+
+    <!-- Results scroll view (hidden until first translation) -->
+    <ScrollView
+        android:id="@+id/resultsContent"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:fillViewport="true"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingHorizontal="@dimen/pt_section_h_padding"
+            android:paddingTop="0dp"
+            android:paddingBottom="64dp">
+
+            <!-- ══════════════════════════════════════════════════════ -->
+            <!-- TRANSLATION                                           -->
+            <!-- ══════════════════════════════════════════════════════ -->
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:paddingTop="@dimen/pt_group_gap"
+                android:paddingBottom="8dp"
+                android:paddingStart="4dp"
+                android:paddingEnd="4dp">
+
+                <TextView
+                    android:id="@+id/labelTranslation"
+                    style="@style/Text.PT.GroupHeader"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/section_translation" />
+
+                <ImageButton
+                    android:id="@+id/btnCopyTranslation"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:layout_marginEnd="12dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="Copy translation"
+                    android:src="@drawable/ic_copy"
+                    app:tint="?attr/ptTextMuted" />
+
+                <ImageButton
+                    android:id="@+id/btnToggleTranslation"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="Toggle translation visibility"
+                    android:src="@drawable/ic_visibility"
+                    app:tint="?attr/ptTextMuted" />
+
+            </LinearLayout>
+
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/cardTranslation"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                app:cardBackgroundColor="?attr/ptCard"
+                app:cardCornerRadius="@dimen/pt_radius"
+                app:cardElevation="0dp"
+                app:strokeColor="?attr/ptDivider"
+                app:strokeWidth="1dp">
+
+                <LinearLayout
+                    android:id="@+id/translationContent"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:paddingHorizontal="@dimen/pt_row_h_padding"
+                    android:paddingVertical="@dimen/pt_row_v_padding">
+
+                    <TextView
+                        android:id="@+id/tvTranslation"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:textSize="24sp"
+                        android:textColor="?attr/ptText"
+                        android:lineSpacingMultiplier="1" />
+
+                    <TextView
+                        android:id="@+id/tvTranslationNote"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:textColor="?attr/ptTextHint"
+                        android:textSize="11sp"
+                        android:visibility="gone" />
+
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- ══════════════════════════════════════════════════════ -->
+            <!-- SOURCE (Original)                                     -->
+            <!-- ══════════════════════════════════════════════════════ -->
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:paddingTop="@dimen/pt_group_gap"
+                android:paddingBottom="8dp"
+                android:paddingStart="4dp"
+                android:paddingEnd="4dp">
+
+                <TextView
+                    android:id="@+id/labelOriginal"
+                    style="@style/Text.PT.GroupHeader"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/section_original" />
+
+                <ImageButton
+                    android:id="@+id/btnToggleFurigana"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:layout_marginEnd="12dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="Toggle inline furigana"
+                    android:src="@drawable/ic_furigana"
+                    app:tint="?attr/ptTextMuted" />
+
+                <ImageButton
+                    android:id="@+id/btnEditOriginal"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:layout_marginEnd="12dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="Edit original text"
+                    android:src="@drawable/ic_edit"
+                    app:tint="?attr/ptTextMuted" />
+
+                <ImageButton
+                    android:id="@+id/btnCopyOriginal"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:layout_marginEnd="12dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="Copy original"
+                    android:src="@drawable/ic_copy"
+                    app:tint="?attr/ptTextMuted" />
+
+                <ImageButton
+                    android:id="@+id/btnToggleOriginal"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="Toggle original visibility"
+                    android:src="@drawable/ic_visibility"
+                    app:tint="?attr/ptTextMuted" />
+
+            </LinearLayout>
+
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/cardOriginal"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                app:cardBackgroundColor="?attr/ptCard"
+                app:cardCornerRadius="@dimen/pt_radius"
+                app:cardElevation="0dp"
+                app:strokeColor="?attr/ptDivider"
+                app:strokeWidth="1dp">
+
+                <LinearLayout
+                    android:id="@+id/originalContent"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:paddingHorizontal="@dimen/pt_row_h_padding"
+                    android:paddingVertical="@dimen/pt_row_v_padding">
+
+                    <com.playtranslate.ui.ClickableTextView
+                        android:id="@+id/tvOriginal"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:textSize="20sp"
+                        android:textColor="?attr/ptText"
+                        android:lineSpacingMultiplier="1" />
+
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- ══════════════════════════════════════════════════════ -->
+            <!-- WORDS                                                 -->
+            <!-- ══════════════════════════════════════════════════════ -->
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:paddingTop="@dimen/pt_group_gap"
+                android:paddingBottom="8dp"
+                android:paddingStart="4dp"
+                android:paddingEnd="4dp">
+
+                <TextView
+                    android:id="@+id/labelWords"
+                    style="@style/Text.PT.GroupHeader"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/section_words" />
+
+                <ImageButton
+                    android:id="@+id/btnToggleWords"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="Toggle words visibility"
+                    android:src="@drawable/ic_visibility"
+                    app:tint="?attr/ptTextMuted" />
+
+            </LinearLayout>
+
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/cardWords"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                app:cardBackgroundColor="?attr/ptCard"
+                app:cardCornerRadius="@dimen/pt_radius"
+                app:cardElevation="0dp"
+                app:strokeColor="?attr/ptDivider"
+                app:strokeWidth="1dp">
+
+                <LinearLayout
+                    android:id="@+id/wordsContent"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/tvMainWordsLoading"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:paddingHorizontal="@dimen/pt_row_h_padding"
+                        android:paddingVertical="@dimen/pt_row_v_padding"
+                        android:text="@string/words_loading"
+                        android:textColor="?attr/ptTextHint"
+                        android:textSize="13sp"
+                        android:visibility="gone" />
+
+                    <LinearLayout
+                        android:id="@+id/mainWordsContainer"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical" />
+
+                    <TextView
+                        android:id="@+id/tvNoWords"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:paddingHorizontal="@dimen/pt_row_h_padding"
+                        android:paddingVertical="@dimen/pt_row_v_padding"
+                        android:text="@string/words_none"
+                        android:textColor="?attr/ptTextHint"
+                        android:textSize="13sp"
+                        android:visibility="gone" />
+
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- Action buttons row -->
+            <LinearLayout
+                android:id="@+id/resultActionButtons"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginTop="20dp"
+                android:layout_marginBottom="12dp"
+                android:visibility="gone">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnResultClear"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    android:layout_width="0dp"
+                    android:layout_height="48dp"
+                    android:layout_weight="1"
+                    android:layout_marginEnd="8dp"
+                    android:text="Clear"
+                    android:textAllCaps="false"
+                    android:textSize="14sp"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    app:strokeColor="?attr/ptTextMuted"
+                    app:cornerRadius="6dp" />
+
+            </LinearLayout>
+
+        </LinearLayout>
+
+    </ScrollView>
+
+    <!-- Floating Anki pill button -->
+    <LinearLayout
+        android:id="@+id/btnResultAnki"
+        android:layout_width="wrap_content"
+        android:layout_height="40dp"
+        android:layout_gravity="bottom|end"
+        android:layout_marginEnd="16dp"
+        android:layout_marginBottom="16dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:background="@drawable/bg_anki_pill"
+        android:paddingStart="12dp"
+        android:paddingEnd="16dp"
+        android:elevation="6dp"
+        android:alpha="0.85"
+        android:clickable="true"
+        android:focusable="true"
+        android:visibility="gone">
+
+        <ImageView
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:src="@drawable/ic_card_stack"
+            app:tint="?attr/ptAccentOn"
+            android:scaleType="centerInside" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Anki"
+            android:textColor="?attr/ptAccentOn"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:layout_marginStart="2dp" />
+
+    </LinearLayout>
+
+</FrameLayout>

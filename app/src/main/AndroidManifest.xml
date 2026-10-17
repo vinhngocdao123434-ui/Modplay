@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.BIND_ACCESSIBILITY_SERVICE"
+        tools:ignore="ProtectedPermissions" />
+    <uses-permission android:name="com.ichi2.anki.permission.READ_WRITE_DATABASE" />
+
+    <queries>
+        <package android:name="com.ichi2.anki" />
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE" />
+        </intent>
+    </queries>
+
+    <application
+        android:name=".PlayTranslateApplication"
+        android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:networkSecurityConfig="@xml/network_security_config"
+        android:theme="@style/Theme.PlayTranslate">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:resizeableActivity="true"
+            android:windowSoftInputMode="adjustResize"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Lightweight host for Anki review when launched from the floating overlay. -->
+        <activity
+            android:name=".ui.WordAnkiReviewActivity"
+            android:exported="false"
+            android:taskAffinity=""
+            android:excludeFromRecents="true"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
+            android:theme="@style/Theme.PlayTranslate" />
+
+        <!-- Standalone results host for region capture on single-screen / backgrounded. -->
+        <activity
+            android:name=".ui.TranslationResultActivity"
+            android:exported="false"
+            android:taskAffinity=""
+            android:excludeFromRecents="true"
+            android:theme="@style/Theme.PlayTranslate" />
+
+        <!-- Multi-step language selection wizard (source → target → download → confirm). -->
+        <activity
+            android:name=".ui.LanguageSetupActivity"
+            android:exported="false"
+            android:theme="@style/Theme.PlayTranslate" />
+
+        <!-- DeepL API key entry sub-screen (launched from Settings → Translation Service). -->
+        <activity
+            android:name=".ui.DeepLSettingsActivity"
+            android:exported="false"
+            android:parentActivityName=".MainActivity"
+            android:theme="@style/Theme.PlayTranslate" />
+
+<!-- Foreground service that owns the OCR + translation pipeline. -->
+        <service
+            android:name=".CaptureService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="OCR and translation pipeline using AccessibilityService screen capture" />
+        </service>
+
+        <!-- FileProvider to share screenshot cache files with AnkiDroid -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="com.playtranslate.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_provider_paths" />
+        </provider>
+
+        <!--
+            AccessibilityService used solely to call takeScreenshot(displayId).
+            This lets us capture the game display (top screen) without any UI,
+            focus change, or MediaProjection — the app stays on the bottom screen.
+            User must enable once in Settings → Accessibility → PlayTranslate.
+        -->
+        <service
+            android:name=".PlayTranslateAccessibilityService"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_service_config" />
+        </service>
+
+        <!--
+            Quick Settings tile that toggles the floating overlay icon.
+            ACTIVE_TILE lets external pref-write sites push the tile state via
+            TileService.requestListeningState even when the shade isn't open.
+        -->
+        <service
+            android:name=".PlayTranslateTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_qs_tile"
+            android:label="@string/tile_label"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.quicksettings.ACTIVE_TILE"
+                android:value="true" />
+        </service>
+
+    </application>
+
+</manifest>

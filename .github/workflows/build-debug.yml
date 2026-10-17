@@ -1,0 +1,57 @@
+name: Build Debug APK
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Setup OpenCL Vendor Dependencies
+        run: |
+          mkdir -p vendor
+          if [ ! -f "vendor/OpenCL-ICD-Loader/CMakeLists.txt" ]; then
+            echo "Cloning missing OpenCL-ICD-Loader..."
+            rm -rf vendor/OpenCL-ICD-Loader
+            git clone --depth 1 https://github.com/KhronosGroup/OpenCL-ICD-Loader.git vendor/OpenCL-ICD-Loader
+          fi
+          if [ ! -f "vendor/OpenCL-Headers/CMakeLists.txt" ] && [ ! -d "vendor/OpenCL-Headers/CL" ]; then
+            echo "Cloning missing OpenCL-Headers..."
+            rm -rf vendor/OpenCL-Headers
+            git clone --depth 1 https://github.com/KhronosGroup/OpenCL-Headers.git vendor/OpenCL-Headers
+          fi
+
+      - name: Prepare local config files
+        run: |
+          touch local.properties
+          echo "deepl.api.key=" >> local.properties
+          chmod +x gradlew || true
+
+      - name: Build Debug APK
+        run: ./gradlew assembleDebug -x test -x lint --no-daemon --stacktrace
+
+      - name: Upload Debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: PlayTranslate-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
