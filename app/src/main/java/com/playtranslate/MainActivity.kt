@@ -1482,16 +1482,18 @@ class MainActivity :
         
         // Bỏ qua đòi Accessibility nếu máy đã bật Root mode
         if (prefs.useRootMode && com.playtranslate.root.RootHelper.isRootAvailable()) {
-            lifecycleScope.launch {
-                com.playtranslate.root.RootHelper.grantAllPermissionsViaRoot(this@MainActivity)
-            }
             onboardingContainer.visibility = View.GONE
-            lifecycleScope.launch {
-                var retries = 0
-                while (!PlayTranslateAccessibilityService.isConnected && retries < 15) {
-                    kotlinx.coroutines.delay(100)
-                    retries++
+            if (!PlayTranslateAccessibilityService.isEnabled(this)) {
+                lifecycleScope.launch {
+                    com.playtranslate.root.RootHelper.grantAllPermissionsViaRoot(this@MainActivity)
+                    var retries = 0
+                    while (!PlayTranslateAccessibilityService.isConnected && retries < 20) {
+                        kotlinx.coroutines.delay(150)
+                        retries++
+                    }
+                    updateActionButtonState()
                 }
+            } else {
                 updateActionButtonState()
             }
             return

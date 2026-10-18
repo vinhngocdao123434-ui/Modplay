@@ -95,7 +95,7 @@ class PlayTranslateAccessibilityService : AccessibilityService() {
 
         showRegionDragOverlay(display, initZone) { _ -> }
         
-        val ctx = createDisplayContext(display)
+        val ctx = getSafeWindowContext(display)
         val wm = ctx.getSystemService(WindowManager::class.java) ?: return
         val dp = ctx.resources.displayMetrics.density
 
@@ -552,7 +552,7 @@ class PlayTranslateAccessibilityService : AccessibilityService() {
         // Skip for full-screen regions
         if (region.isFullScreen) return
 
-        val ctx = createDisplayContext(display)
+        val ctx = getSafeWindowContext(display)
         val wm = ctx.getSystemService(WindowManager::class.java) ?: return
         val dp = ctx.resources.displayMetrics.density
         val displayLabel = region.label
@@ -735,7 +735,7 @@ class PlayTranslateAccessibilityService : AccessibilityService() {
     fun showNoTextPill(display: Display, message: String) {
         hideNoTextPill()
 
-        val ctx = createDisplayContext(display)
+        val ctx = getSafeWindowContext(display)
         val wm = ctx.getSystemService(WindowManager::class.java) ?: return
         val dp = ctx.resources.displayMetrics.density
         val icon = ctx.packageManager.getApplicationIcon(ctx.applicationInfo)
@@ -821,7 +821,7 @@ class PlayTranslateAccessibilityService : AccessibilityService() {
         onRegionChanged: (RegionEntry) -> Unit
     ) {
         hideRegionDragOverlay()
-        val wm = createDisplayContext(display).getSystemService(WindowManager::class.java) ?: return
+        val wm = getSafeWindowContext(display).getSystemService(WindowManager::class.java) ?: return
         val view = RegionDragView(this).apply {
             setRegion(initRegion.top, initRegion.bottom, initRegion.left, initRegion.right)
             this.onRegionChanged = onRegionChanged
@@ -953,7 +953,7 @@ class PlayTranslateAccessibilityService : AccessibilityService() {
         screenshotW: Int, screenshotH: Int
     ) {
         hideDebugOverlay()
-        val wm = createDisplayContext(display).getSystemService(WindowManager::class.java) ?: return
+        val wm = getSafeWindowContext(display).getSystemService(WindowManager::class.java) ?: return
         val view = OcrDebugOverlayView(this).apply {
             setBoxes(boxes, cropLeft, cropTop, screenshotW, screenshotH)
         }
@@ -1002,7 +1002,7 @@ class PlayTranslateAccessibilityService : AccessibilityService() {
         // Pinhole flavor mismatch (or no overlay yet) — tear down just this
         // display's pair and rebuild. Other displays' overlays are untouched.
         hideTranslationOverlayForDisplay(displayId)
-        val displayCtx = createDisplayContext(display)
+        val displayCtx = getSafeWindowContext(display)
         val themedCtx = android.view.ContextThemeWrapper(displayCtx, android.R.style.Theme_DeviceDefault)
         val wm = displayCtx.getSystemService(WindowManager::class.java) ?: return
         val view = TranslationOverlayView(themedCtx, pinholeMode = pinholeMode).apply {
@@ -1180,7 +1180,7 @@ class PlayTranslateAccessibilityService : AccessibilityService() {
         if (displayId in touchSentinels) return
         val dm = getSystemService(DisplayManager::class.java)
         val display = dm.getDisplay(displayId) ?: return
-        val ctx = createDisplayContext(display)
+        val ctx = getSafeWindowContext(display)
         val wm = ctx.getSystemService(WindowManager::class.java) ?: return
         val view = View(ctx).apply {
             setOnTouchListener { _, event ->
@@ -1447,7 +1447,7 @@ class PlayTranslateAccessibilityService : AccessibilityService() {
         // down first so the closures and registry stay coherent.
         hideFloatingIconForDisplay(displayId, "recreating")
 
-        val displayCtx = createDisplayContext(display)
+        val displayCtx = getSafeWindowContext(display)
         val wm = displayCtx.getSystemService(WindowManager::class.java) ?: return
 
         val icon = FloatingOverlayIcon(displayCtx).apply {
@@ -1657,10 +1657,10 @@ class PlayTranslateAccessibilityService : AccessibilityService() {
 
     private fun showFloatingMenu(display: Display, icon: FloatingOverlayIcon) {
         dismissFloatingMenu()
-        val wm = createDisplayContext(display).getSystemService(WindowManager::class.java) ?: return
+        val wm = getSafeWindowContext(display).getSystemService(WindowManager::class.java) ?: return
         val screenSize = getDisplaySize(display)
         val themeRes = baseActivityTheme(this)
-        val themedCtx = android.view.ContextThemeWrapper(createDisplayContext(display), themeRes)
+        val themedCtx = android.view.ContextThemeWrapper(getSafeWindowContext(display), themeRes)
         applyAccentOverlay(themedCtx.theme, this)
         val menu = FloatingIconMenu(themedCtx)
         menu.isSingleScreen = Prefs.isSingleScreen(this)
@@ -1820,7 +1820,7 @@ class PlayTranslateAccessibilityService : AccessibilityService() {
     }
 
     private fun showHideConfirmAlert(display: android.view.Display) {
-        val displayCtx = createDisplayContext(display)
+        val displayCtx = getSafeWindowContext(display)
         val overlayWm = displayCtx.getSystemService(WindowManager::class.java) ?: return
         val appName = getString(R.string.app_name)
         val prefs = Prefs(this)
@@ -1899,7 +1899,7 @@ class PlayTranslateAccessibilityService : AccessibilityService() {
         }
 
         // Build floating Use / Cancel button bar
-        val ctx = createDisplayContext(display)
+        val ctx = getSafeWindowContext(display)
         val wm = ctx.getSystemService(WindowManager::class.java) ?: return
         val dp = ctx.resources.displayMetrics.density
         val btnSize = (48 * dp).toInt()
@@ -2178,6 +2178,16 @@ class PlayTranslateAccessibilityService : AccessibilityService() {
 
     // ── Screenshot (legacy, kept for callers not yet migrated) ──────────
     // All new code should use screenshotManager.requestClean/requestRaw.
+
+
+    private fun getSafeWindowContext(display: Display): Context {
+        val displayCtx = createDisplayContext(display)
+        return if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+            displayCtx.createWindowContext(WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY, null)
+        } else {
+            displayCtx
+        }
+    }
 
     companion object {
         private const val TAG = "PlayTranslateA11y"
