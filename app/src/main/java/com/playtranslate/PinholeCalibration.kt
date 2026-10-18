@@ -98,11 +98,11 @@ object PinholeCalibration {
     const val PINHOLE_SPACING = 3
 
     /** Per-channel delta threshold for classifying a pinhole as "changed". */
-    const val SPLATTER_THRESHOLD = 60
+    const val SPLATTER_THRESHOLD = 85
 
     /** Fraction of pinholes in a box that must change to mark it DIRTY. */
-    const val PINHOLE_DIRTY_PCT = 0.03f
+    const val PINHOLE_DIRTY_PCT = 0.06f
 
     /** Fraction of pinholes in a box that must change to mark it REMOVE. */
-    const val PINHOLE_CHANGE_PCT = 0.10f
+    const val PINHOLE_CHANGE_PCT = 0.18f
 }

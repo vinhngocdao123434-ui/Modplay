@@ -368,7 +368,7 @@ class TranslationOverlayView(
                         setPadding(textMargin, textMargin, textMargin, textMargin)
                         // Pinholes need opaque bg (pinholes handle transparency).
                         // Without pinholes, use native alpha (~224 = 88% opaque).
-                        setBackgroundColor(if (pinholeMode) box.bgColor or 0xFF000000.toInt() else box.bgColor)
+                        setBackgroundColor(box.bgColor) // Removed hard opacity to keep translations looking natural
                         TextViewCompat.setAutoSizeTextTypeUniformWithConfiguration(
                             this, minTextSizeSp, maxTextSizeSp, 1, TypedValue.COMPLEX_UNIT_SP
                         )

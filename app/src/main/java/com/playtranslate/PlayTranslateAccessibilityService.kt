@@ -72,50 +72,8 @@ class PlayTranslateAccessibilityService : AccessibilityService() {
         cropLeft: Int, cropTop: Int,
         screenshotW: Int, screenshotH: Int
     ) {
+        // Logic moved entirely to TranslationOverlayView to fix z-order and touch issues.
         clearInspectClickableBoxes()
-        if (!Prefs(this).inspectModeEnabled || boxes.isEmpty()) return
-        val ctx = createDisplayContext(display)
-        val wm = ctx.getSystemService(WindowManager::class.java) ?: return
-        val dm = resources.displayMetrics
-        val scaleX = dm.widthPixels.toFloat() / screenshotW
-        val scaleY = dm.heightPixels.toFloat() / screenshotH
-
-        for (box in boxes) {
-            if (box.translatedText.isBlank()) continue
-            val b = box.bounds
-            val left = ((b.left + cropLeft) * scaleX).toInt()
-            val top = ((b.top + cropTop) * scaleY).toInt()
-            val right = ((b.right + cropLeft) * scaleX).toInt()
-            val bottom = ((b.bottom + cropTop) * scaleY).toInt()
-            val w = (right - left).coerceAtLeast(20)
-            val h = (bottom - top).coerceAtLeast(20)
-
-            val clickable = View(ctx).apply {
-                isClickable = true
-                setOnClickListener {
-                    com.playtranslate.ui.TranslationBoxDetailOverlay(
-                        this@PlayTranslateAccessibilityService,
-                        wm,
-                        display.displayId,
-                        box.sourceText,
-                        box.translatedText
-                    ).show()
-                }
-            }
-            val lp = WindowManager.LayoutParams(
-                w, h,
-                WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-                PixelFormat.TRANSLUCENT
-            ).apply {
-                gravity = Gravity.TOP or Gravity.START
-                x = left
-                y = top
-            }
-            if (addOverlayWindow(clickable, wm, lp, display.displayId)) {
-                inspectWindows.add(clickable)
-            }
-        }
     }
 
     fun clearInspectClickableBoxes() {

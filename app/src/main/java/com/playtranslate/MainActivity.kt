@@ -1241,12 +1241,17 @@ class MainActivity :
                 ensureConfigured()
                 action()
             }
-            // Enabled in Settings but Android hasn't bound the service to our
-            // process yet (cold-start window, or post-unbind rebinding). Silent
-            // no-op — the next tap will catch the bound state. Crucially, we
-            // do NOT fall through to showAccessibilityDialog() here: the user
-            // has already granted accessibility, prompting again is the bug
-            // this routing exists to prevent.
+            Prefs(this).useRootMode && com.playtranslate.root.RootHelper.isRootAvailable() -> {
+                Toast.makeText(this, "Starting Root Service...", Toast.LENGTH_SHORT).show()
+                lifecycleScope.launch {
+                    com.playtranslate.root.RootHelper.grantAllPermissionsViaRoot(this@MainActivity)
+                    kotlinx.coroutines.delay(1000)
+                    if (PlayTranslateAccessibilityService.isConnected) {
+                        ensureConfigured()
+                        action()
+                    }
+                }
+            }
             PlayTranslateAccessibilityService.isEnabled(this) -> {}
             else -> showAccessibilityDialog()
         }
@@ -1481,6 +1486,14 @@ class MainActivity :
                 com.playtranslate.root.RootHelper.grantAllPermissionsViaRoot(this@MainActivity)
             }
             onboardingContainer.visibility = View.GONE
+            lifecycleScope.launch {
+                var retries = 0
+                while (!PlayTranslateAccessibilityService.isConnected && retries < 15) {
+                    kotlinx.coroutines.delay(100)
+                    retries++
+                }
+                updateActionButtonState()
+            }
             return
         }
 
