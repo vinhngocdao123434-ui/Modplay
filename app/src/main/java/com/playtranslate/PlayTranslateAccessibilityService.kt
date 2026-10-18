@@ -61,6 +61,74 @@ import kotlinx.coroutines.launch
  */
 class PlayTranslateAccessibilityService : AccessibilityService() {
 
+    fun showTtsZoneEditor(display: Display) {
+        val prefs = Prefs(this)
+        val currentZone = prefs.getTtsZone()
+        val initZone = if (currentZone.isFullScreen) {
+            RegionEntry("TTS Zone", 0.55f, 0.90f, 0.10f, 0.90f, id = "tts_zone_default")
+        } else currentZone
+
+        showRegionDragOverlay(display, initZone) { _ -> }
+        
+        val ctx = createDisplayContext(display)
+        val wm = ctx.getSystemService(WindowManager::class.java) ?: return
+        val dp = ctx.resources.displayMetrics.density
+        val btnSize = (48 * dp).toInt()
+
+        val bar = android.widget.LinearLayout(ctx).apply {
+            orientation = android.widget.LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            setPadding((16 * dp).toInt(), (10 * dp).toInt(), (16 * dp).toInt(), (10 * dp).toInt())
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(Color.argb(230, 30, 30, 30))
+                cornerRadius = 20 * dp
+                setStroke((1 * dp).toInt(), Color.parseColor("#9C27B0"))
+            }
+        }
+
+        val cancelBtn = android.widget.TextView(ctx).apply {
+            text = "✕ Hủy"
+            setTextColor(Color.WHITE)
+            textSize = 14f
+            gravity = Gravity.CENTER
+            setPadding((12 * dp).toInt(), 0, (12 * dp).toInt(), 0)
+            setOnClickListener { hideRegionDragOverlay(); removeOverlayWindow(bar) }
+        }
+
+        val saveBtn = android.widget.TextView(ctx).apply {
+            text = "✓ Lưu vùng TTS"
+            setTextColor(Color.parseColor("#E1BEE7"))
+            textSize = 14f
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            gravity = Gravity.CENTER
+            setPadding((12 * dp).toInt(), 0, (12 * dp).toInt(), 0)
+            setOnClickListener {
+                val dv = dragView
+                if (dv != null) {
+                    prefs.setTtsZone(RegionEntry("TTS Zone", dv.topFraction, dv.bottomFraction, dv.leftFraction, dv.rightFraction))
+                }
+                hideRegionDragOverlay()
+                removeOverlayWindow(bar)
+            }
+        }
+
+        bar.addView(cancelBtn)
+        bar.addView(saveBtn)
+
+        val barParams = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+            y = (48 * dp).toInt()
+        }
+        addOverlayWindow(bar, wm, barParams, display.displayId)
+    }
+
+
     private var dragView: RegionDragView? = null
     private var dragWm: WindowManager? = null
     /** True when the region drag editor overlay is showing. */
@@ -926,7 +994,7 @@ class PlayTranslateAccessibilityService : AccessibilityService() {
         }
         val isInspect = Prefs(this).inspectModeEnabled
         val baseFlags = if (isInspect) {
-            WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
         } else {
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
         }
@@ -1676,12 +1744,7 @@ class PlayTranslateAccessibilityService : AccessibilityService() {
             hideTranslationOverlay()
             CaptureService.instance?.refreshLiveOverlay()
         }
-        menu.onSetTtsZone = {
-            dismissFloatingMenu()
-            showRegionDragOverlay(display, Prefs(this).getTtsZone()) { zone ->
-                Prefs(this).setTtsZone(zone)
-            }
-        }
+        menu.onSetTtsZone = { dismissFloatingMenu(); showTtsZoneEditor(display) }
         menu.onCaptureRegion = {
             dismissFloatingMenu()
             val effectivelySingleScreen = Prefs.isSingleScreen(this) || !MainActivity.isInForeground

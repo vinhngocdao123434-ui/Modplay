@@ -1,5 +1,6 @@
 package com.playtranslate.root
 
+import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.Log
@@ -13,40 +14,33 @@ object RootHelper {
 
     fun isRootAvailable(): Boolean {
         val paths = arrayOf(
-            "/system/bin/su",
-            "/system/xbin/su",
-            "/sbin/su",
-            "/system/su",
-            "/system/bin/.ext/.su",
-            "/system/usr/we-need-root/su-backup"
+            "/system/bin/su", "/system/xbin/su", "/sbin/su",
+            "/system/su", "/system/bin/.ext/.su"
         )
         return paths.any { File(it).exists() }
     }
 
-    suspend fun requestRootPermission(): Boolean = withContext(Dispatchers.IO) {
+    suspend fun grantAllPermissionsViaRoot(context: Context): Boolean = withContext(Dispatchers.IO) {
         try {
+            val pkg = context.packageName
+            val a11yComponent = "$pkg/$pkg.PlayTranslateAccessibilityService"
+            val cmds = arrayOf(
+                "pm grant $pkg android.permission.SYSTEM_ALERT_WINDOW",
+                "pm grant $pkg android.permission.POST_NOTIFICATIONS",
+                "settings put secure enabled_accessibility_services $a11yComponent",
+                "settings put secure accessibility_enabled 1"
+            )
             val process = Runtime.getRuntime().exec("su")
             process.outputStream.use { os ->
-                os.write("id\nexit\n".toByteArray())
+                for (c in cmds) {
+                    os.write((c + "\n").toByteArray())
+                }
+                os.write("exit\n".toByteArray())
                 os.flush()
             }
             process.waitFor() == 0
         } catch (e: Exception) {
-            Log.w(TAG, "Root request failed: ${e.message}")
-            false
-        }
-    }
-
-    suspend fun grantOverlayPermission(packageName: String): Boolean = withContext(Dispatchers.IO) {
-        try {
-            val process = Runtime.getRuntime().exec("su")
-            process.outputStream.use { os ->
-                os.write("pm grant $packageName android.permission.SYSTEM_ALERT_WINDOW\nexit\n".toByteArray())
-                os.flush()
-            }
-            process.waitFor() == 0
-        } catch (e: Exception) {
-            Log.w(TAG, "grantOverlayPermission failed: ${e.message}")
+            Log.e(TAG, "grantAllPermissionsViaRoot failed: ${e.message}")
             false
         }
     }
@@ -55,28 +49,16 @@ object RootHelper {
         try {
             val cmd = if (displayId > 0) "screencap -d $displayId -p\n" else "screencap -p\n"
             val process = Runtime.getRuntime().exec("su")
-            val outputStream = process.outputStream
-            outputStream.write(cmd.toByteArray())
-            outputStream.write("exit\n".toByteArray())
-            outputStream.flush()
-
-            val inputStream = process.inputStream
-            val byteBuffer = ByteArrayOutputStream()
-            val buffer = ByteArray(32 * 1024)
-            var read: Int
-            while (inputStream.read(buffer).also { read = it } != -1) {
-                byteBuffer.write(buffer, 0, read)
+            process.outputStream.use { os ->
+                os.write(cmd.toByteArray())
+                os.write("exit\n".toByteArray())
+                os.flush()
             }
+            val bytes = process.inputStream.use { it.readBytes() }
             process.waitFor()
-
-            val bytes = byteBuffer.toByteArray()
-            if (bytes.isNotEmpty()) {
-                BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-            } else {
-                null
-            }
+            if (bytes.isNotEmpty()) BitmapFactory.decodeByteArray(bytes, 0, bytes.size) else null
         } catch (e: Exception) {
-            Log.e(TAG, "captureScreenRoot failed: ${e.message}", e)
+            Log.e(TAG, "captureScreenRoot failed: ${e.message}")
             null
         }
     }

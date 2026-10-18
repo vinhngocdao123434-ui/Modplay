@@ -217,6 +217,34 @@ class TranslationOverlayView(
         skeletonBars.clear()
         removeAllViews()
         if (boxes.isEmpty()) return
+
+        if (Prefs(context).inspectModeEnabled) {
+            val banner = TextView(context).apply {
+                text = "✕ THOÁT CHẾ ĐỘ CHẠM (INSPECT)"
+                textSize = 12f
+                typeface = android.graphics.Typeface.DEFAULT_BOLD
+                setTextColor(Color.WHITE)
+                gravity = Gravity.CENTER
+                setPadding((16 * dp).toInt(), (8 * dp).toInt(), (16 * dp).toInt(), (8 * dp).toInt())
+                background = android.graphics.drawable.GradientDrawable().apply {
+                    setColor(Color.argb(220, 200, 40, 40))
+                    cornerRadius = 16 * dp
+                }
+                setOnClickListener {
+                    Prefs(context).inspectModeEnabled = false
+                    PlayTranslateAccessibilityService.instance?.let { s ->
+                        s.hideTranslationOverlay()
+                        CaptureService.instance?.refreshLiveOverlay()
+                    }
+                }
+            }
+            val bannerLp = LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply {
+                gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+                topMargin = (24 * dp).toInt()
+            }
+            addView(banner, bannerLp)
+        }
+
         val rebuildStart = System.currentTimeMillis()
         val textBoxCount = boxes.count { !it.isFurigana && it.translatedText.isNotEmpty() }
         if (textBoxCount > 0) {
