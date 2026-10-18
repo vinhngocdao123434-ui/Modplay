@@ -95,7 +95,7 @@ class PlayTranslateAccessibilityService : AccessibilityService() {
 
         showRegionDragOverlay(display, initZone) { _ -> }
         
-        val ctx = getSafeOverlayContext(display)
+        val ctx = if (display.displayId == android.view.Display.DEFAULT_DISPLAY || display.displayId <= 0) this else this.createDisplayContext(display)
         val wm = ctx.getSystemService(WindowManager::class.java) ?: return
         val dp = ctx.resources.displayMetrics.density
 
@@ -132,697 +132,7 @@ class PlayTranslateAccessibilityService : AccessibilityService() {
                     prefs.setTtsZone(RegionEntry("TTS Zone", dv.topFraction, dv.bottomFraction, dv.leftFraction, dv.rightFraction))
                 }
                 hideRegionDragOverlay()
-                removeOverlayWindow(bar)
-            }
-        }
-
-        bar.addView(cancelBtn)
-        bar.addView(saveBtn)
-
-        val barParams = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-            PixelFormat.TRANSLUCENT
-        ).apply {
-            gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
-            y = (48 * dp).toInt()
-        }
-        addOverlayWindow(bar, wm, barParams, display.displayId)
-    }
-
-
-
-    private var dragView: RegionDragView? = null
-    private var dragWm: WindowManager? = null
-    /** True when the region drag editor overlay is showing. */
-    val isRegionEditorActive: Boolean get() = dragView != null
-    /**
-     * Per-display floating-icon bundle. The icon, its WindowManager, the
-     * drag-lookup controller, and the live-pause clear-flag closure all
-     * lifecycle together — they're co-installed in [installFloatingIconForDisplay]
-     * and co-torn-down in [hideFloatingIconForDisplay]. Bundling enforces the
-     * "all four exist together or none do" invariant — previously maintained
-     * by convention across four parallel maps.
-     *
-     * The pre-multi-display single-icon setter used to fan out to
-     * [CaptureService.updateForegroundState] + [CaptureService.syncIconState]
-     * on every install/teardown; those calls now live inside the install and
-     * remove functions so per-display add/remove still triggers them.
-     *
-     * `clearLivePauseFlag` closes over the install-time `liveWasPausedForPopup`
-     * local in [installFloatingIconForDisplay]. Invoked via
-     * [cancelLivePauseObligation] so the chained `resumeLiveMode` in the
-     * magnifier-dismiss callback becomes a no-op in single-screen — the user
-     * re-enables live mode manually after closing the detail view.
-     */
-    private data class FloatingIconHandle(
-        val icon: FloatingOverlayIcon,
-        val wm: WindowManager,
-        val dragController: DragLookupController,
-        val clearLivePauseFlag: () -> Unit,
-    )
-
-    private val iconHandles: MutableMap<Int, FloatingIconHandle> = mutableMapOf()
-
-    /** True iff at least one floating icon is currently registered. */
-    val hasAnyFloatingIcon: Boolean get() = iconHandles.isNotEmpty()
-
-    /** Set [FloatingOverlayIcon.showLoading] across every registered icon.
-     *  P2 propagates this globally; P5's one-shot fan-out scopes it to the
-     *  display whose icon initiated the hold. */
-    fun setIconsLoading(loading: Boolean) {
-        iconHandles.values.forEach { it.icon.showLoading = loading }
-    }
-
-    /** Set [FloatingOverlayIcon.degraded] across every registered icon. */
-    fun setIconsDegraded(degraded: Boolean) {
-        iconHandles.values.forEach { it.icon.degraded = degraded }
-    }
-
-    /** Set [FloatingOverlayIcon.liveMode] across every registered icon. */
-    fun setIconsLiveMode(liveMode: Boolean) {
-        iconHandles.values.forEach { it.icon.liveMode = liveMode }
-    }
-
-    /** Returns true when any floating icon is mid-drag. */
-    fun anyIconInDragMode(): Boolean = iconHandles.values.any { it.icon.inDragMode }
-
-    /** Dismiss the drag-lookup popup on every display (only one is realistically
-     *  active since the user has one pointer). */
-    fun dismissAllDragLookupPopups() {
-        iconHandles.values.forEach { it.dragController.dismiss() }
-    }
-
-    /** True if any drag-lookup popup is showing across all displays. */
-    val isAnyDragLookupPopupShowing: Boolean
-        get() = iconHandles.values.any { it.dragController.isPopupShowing }
-    private var floatingMenu: FloatingIconMenu? = null
-    private var floatingMenuWm: WindowManager? = null
-    private var debugOverlayView: OcrDebugOverlayView? = null
-    private var debugOverlayWm: WindowManager? = null
-    /**
-     * Per-display live translation overlay pair. The dirty overlay is the
-     * main overlay's persistent companion (always present, paints empty when
-     * not dirty); they're co-created in [showTranslationOverlay] and
-     * co-torn-down in [hideTranslationOverlayForDisplay]. Bundling enforces
-     * the "exist together or not at all" invariant — previously maintained
-     * by convention across four parallel maps.
-     */
-    private data class TranslationOverlayHandle(
-        val main: TranslationOverlayView,
-        val dirty: TranslationOverlayView,
-    )
-
-    private val translationOverlayHandles: MutableMap<Int, TranslationOverlayHandle> = mutableMapOf()
-
-    /** Live translation overlay for [displayId], or null. */
-    fun translationOverlayForDisplay(displayId: Int): TranslationOverlayView? =
-        translationOverlayHandles[displayId]?.main
-
-    /** Persistent dirty overlay for [displayId], or null. */
-    fun dirtyOverlayForDisplay(displayId: Int): TranslationOverlayView? =
-        translationOverlayHandles[displayId]?.dirty
-
-    /** True iff any display has a live translation overlay registered. */
-    val hasAnyTranslationOverlay: Boolean get() = translationOverlayHandles.isNotEmpty()
-    /** Per-display touch sentinels. With multiple selected displays each
-     *  hosting a floating icon, each display needs its own sentinel — the
-     *  pre-P5 single-instance setup left only the first display's touches
-     *  detectable, so a touch on display B never reached
-     *  [lastInteractedDisplayId] tracking and B's hotkey routing was broken. */
-    private val touchSentinels: MutableMap<Int, View> = mutableMapOf()
-    private var regionEditorBar: View? = null
-    private var regionEditorBarWm: WindowManager? = null
-    private var regionEditorLabel: View? = null
-    private var regionEditorLabelWm: WindowManager? = null
-    private var regionIndicatorView: View? = null
-    private var regionIndicatorWm: WindowManager? = null
-    private var regionIndicatorPersistent = false
-    private var regionIndicatorDisplayId: Int = -1
-    private var regionIndicatorUpdater: ((RegionEntry) -> Unit)? = null
-    private val regionIndicatorHandler = Handler(Looper.getMainLooper())
-    private val debugOcrManager get() = OcrManager.instance
-    private val debugHandler = Handler(Looper.getMainLooper())
-    private var debugRunning = false
-    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
-
-    /** Centralized screenshot manager — all takeScreenshot calls go through here. */
-    var screenshotManager: ScreenshotManager? = null
-        private set
-
-    /** Repositions floating icons when display properties change (e.g.
-     *  rotation), and reconciles the icon registry when displays come or
-     *  go. The registry-reconcile arm is necessary because MainActivity's
-     *  own DisplayListener only runs while it's foregrounded — when the
-     *  user is gaming with the app backgrounded (the typical floating-icon
-     *  case), MainActivity isn't around to react to a hot-plug, so a
-     *  reconnected external display's stale [iconHandles] entry would
-     *  short-circuit the next reconcile and leave that display without a
-     *  working icon. */
-    private val displayListener = object : DisplayManager.DisplayListener {
-        override fun onDisplayAdded(displayId: Int) {
-            reconcileFloatingIcons()
-        }
-        override fun onDisplayRemoved(displayId: Int) {
-            reconcileFloatingIcons()
-        }
-        override fun onDisplayChanged(displayId: Int) {
-            val handle = iconHandles[displayId] ?: return
-            val p = handle.icon.params ?: return
-            val prefs = Prefs(this@PlayTranslateAccessibilityService)
-            val pos = prefs.iconPositionForDisplay(displayId)
-            handle.icon.setPosition(pos.edge, pos.fraction)
-            try { handle.wm.updateViewLayout(handle.icon, p) } catch (_: Exception) {}
-        }
-    }
-
-    /** Stops live mode when the screen turns off. */
-    private val screenReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context, intent: Intent) {
-            if (intent.action == Intent.ACTION_SCREEN_OFF) {
-                CaptureService.instance?.let { if (it.isLive) it.stopLive() }
-                hideTranslationOverlay()
-            }
-        }
-    }
-
-    override fun onServiceConnected() {
-        Log.i(TAG, "onServiceConnected")
-        instance = this
-        screenshotManager = ScreenshotManager(this)
-        serviceInfo = serviceInfo.apply {
-            flags = flags or android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
-        }
-        registerReceiver(screenReceiver, IntentFilter(Intent.ACTION_SCREEN_OFF))
-        (getSystemService(Context.DISPLAY_SERVICE) as DisplayManager)
-            .registerDisplayListener(displayListener, Handler(Looper.getMainLooper()))
-        reconcileFloatingIcons()
-        registerHotkeyCallbacks()
-        PlayTranslateTileService.TileSync.refresh(this)
-    }
-
-    /** Wire hotkey callbacks to CaptureService. Safe to call multiple times. */
-    fun registerHotkeyCallbacks() {
-        val svc = CaptureService.instance ?: return
-        onHotkeyActivated = { mode -> svc.hotkeyHoldStart(mode) }
-        onHotkeyReleased = { svc.hotkeyHoldEnd() }
-    }
-
-    override fun onUnbind(intent: Intent?): Boolean {
-        Log.w(TAG, "onUnbind: tearing down overlays and cancelling scope", Throwable("onUnbind callsite"))
-        try { unregisterReceiver(screenReceiver) } catch (_: Exception) {}
-        (getSystemService(Context.DISPLAY_SERVICE) as DisplayManager)
-            .unregisterDisplayListener(displayListener)
-        stopInputMonitoring()
-        stopDebugOcrLoop()
-        hideTranslationOverlay()
-        hideRegionOverlay()
-        hideRegionIndicator(force = true)
-        hideRegionEditor()
-        hideRegionDragOverlay()
-        dismissFloatingMenu()
-        hideFloatingIcon("unbind")
-        screenshotManager?.destroy()
-        screenshotManager = null
-        serviceScope.cancel()
-        instance = null
-        PlayTranslateTileService.TileSync.refresh(this)
-        return super.onUnbind(intent)
-    }
-
-    /**
-     * Shows a persistent region indicator on the game display. When an
-     * indicator is already up for the same display, the existing window is
-     * reused and just redrawn — see [updateRegionOverlay] — so flipping
-     * between regions in the picker doesn't tear down the surface and flash.
-     */
-    fun showRegionOverlay(display: Display, region: RegionEntry) {
-        if (anyIconInDragMode()) return
-
-        val canUpdateInPlace = !region.isFullScreen &&
-            regionIndicatorPersistent &&
-            regionIndicatorDisplayId == display.displayId &&
-            regionIndicatorUpdater != null
-        if (canUpdateInPlace) {
-            updateRegionOverlay(region)
-            return
-        }
-
-        showRegionIndicator(display, region, persistent = true)
-        // Re-add this display's floating icon so it draws above the full-
-        // screen dim overlay just placed on this display.
-        bringFloatingIconsToFront(display.displayId)
-    }
-
-    /** Updates the existing persistent indicator's region in place. No-op if
-     *  no persistent indicator is currently shown. */
-    fun updateRegionOverlay(region: RegionEntry) {
-        regionIndicatorUpdater?.invoke(region)
-    }
-
-    fun hideRegionOverlay() {
-        hideRegionIndicator(force = true)
-    }
-
-    // ── Overlay window registry ──────────────────────────────────────────
-    //
-    // Every accessibility-overlay window the service owns goes through
-    // [addOverlayWindow] / [removeOverlayWindow]. [prepareForCleanCapture]
-    // walks the registry and blanks each window via window-level alpha so
-    // none of them appear in the captured frame. This replaces a previous
-    // patchwork of per-overlay flags + View.alpha tweaks that left newly
-    // added windows (e.g. the magnifier) silently in the screenshot.
-
-    /** Registered overlay window. Stored handle keeps the wm + params so
-     *  blanking can flip [WindowManager.LayoutParams.alpha] and call
-     *  [WindowManager.updateViewLayout] without each call site managing
-     *  its own state. */
-    data class OverlayHandle(
-        val view: View,
-        val wm: WindowManager,
-        val params: WindowManager.LayoutParams,
-        val displayId: Int,
-    )
-
-    /** Main-thread only — every WindowManager mutation happens on Main. */
-    private val overlayWindows = mutableListOf<OverlayHandle>()
-
-    /**
-     * Add a window via [WindowManager.addView] AND register it for
-     * clean-capture blanking. Returns true on success.
-     *
-     * Honors whatever [WindowManager.LayoutParams.alpha] is on [params].
-     * In particular, [bringFloatingIconsToFront] removes and re-adds the
-     * icon with the same params object — if a clean capture has the icon
-     * blanked at alpha=0, the re-added window stays invisible until the
-     * capture's restore fires. Forcing alpha=1 here would flash the icon
-     * mid-capture and contaminate the bitmap.
-     */
-    fun addOverlayWindow(
-        view: View,
-        wm: WindowManager,
-        params: WindowManager.LayoutParams,
-        displayId: Int,
-    ): Boolean {
-        applyFullScreenOverlayDefaults(params)
-        return try {
-            wm.addView(view, params)
-            overlayWindows += OverlayHandle(view, wm, params, displayId)
-            logOverlayGeometry(view, params, displayId)
-            true
-        } catch (e: Exception) {
-            Log.w(TAG, "addOverlayWindow failed: ${e.message}")
-            false
-        }
-    }
-
-    // One-shot diagnostic: verifies whether MATCH_PARENT overlay windows actually
-    // cover the full display. Investigating bonelag PR #9 — "OCR boxes pushed
-    // down" symptom is consistent with view origin != display origin or view
-    // dims != display dims. Grep with: adb logcat -s PlayTranslateA11y | grep Geometry
-    private fun logOverlayGeometry(
-        view: View,
-        params: WindowManager.LayoutParams,
-        displayId: Int,
-    ) {
-        val fullScreenParams =
-            params.width == WindowManager.LayoutParams.MATCH_PARENT &&
-                params.height == WindowManager.LayoutParams.MATCH_PARENT
-        if (!fullScreenParams) return
-        view.doOnLayout {
-            val display = getSystemService(DisplayManager::class.java)?.getDisplay(displayId)
-            val ds = Point().also { if (display != null) @Suppress("DEPRECATION") display.getRealSize(it) }
-            val loc = IntArray(2)
-            view.getLocationOnScreen(loc)
-            val name = view.javaClass.simpleName.ifBlank { "anon-View@${view.hashCode().toString(16)}" }
-            val flagBits = listOfNotNull(
-                "NO_LIMITS".takeIf { params.flags and WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS != 0 },
-                "IN_SCREEN".takeIf { params.flags and WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN != 0 },
-                "NOT_TOUCHABLE".takeIf { params.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE != 0 },
-            ).joinToString("|").ifEmpty { "none" }
-            val matches = view.width == ds.x && view.height == ds.y && loc[0] == 0 && loc[1] == 0
-            Log.i(
-                TAG,
-                "[Geometry] $name displayId=$displayId display=${ds.x}x${ds.y} " +
-                    "view=${view.width}x${view.height} origin=(${loc[0]},${loc[1]}) " +
-                    "matchesDisplay=$matches flags=$flagBits"
-            )
-        }
-    }
-
-    /** Unregister and call [WindowManager.removeView]. Returns true if the
-     *  view was registered (and thus removed). Returns false if the view was
-     *  never registered — the static [removeOverlay] uses this to fall back
-     *  to a direct removeView for windows that were added before the service
-     *  connected. */
-    fun removeOverlayWindow(view: View): Boolean {
-        val handle = overlayWindows.firstOrNull { it.view === view } ?: return false
-        overlayWindows -= handle
-        try { handle.wm.removeView(view) } catch (_: Exception) {}
-        return true
-    }
-
-    /** Opaque snapshot returned by [prepareForCleanCapture]. */
-    class OverlayState internal constructor(
-        internal val saved: List<OverlayHandle>
-    )
-
-    /**
-     * Hide every registered overlay on [displayId] so it doesn't appear
-     * in a screenshot of that display. Overlays on other displays are left
-     * alone — blanking them would flicker every cycle when N displays are
-     * being captured in turn.
-     *
-     * Uses [WindowManager.LayoutParams.alpha] (window-level, applied by
-     * SurfaceFlinger during composition) rather than [View.alpha] (applied
-     * during view drawing, which can lag a frame behind). Combined with
-     * the 2-vsync wait in [ScreenshotManager.requestClean], this reliably
-     * composites the overlay-free frame before capture.
-     *
-     * Skips handles already at alpha=0 — they belong to a concurrent
-     * in-flight capture that hasn't restored yet. Including them would
-     * let our restore re-show overlays that another capture still needs
-     * hidden. The try/finally in [ScreenshotManager.requestClean] is what
-     * guarantees restore on cancellation/exception, so we don't need
-     * self-healing here.
-     */
-    fun prepareForCleanCapture(displayId: Int): OverlayState {
-        val saved = mutableListOf<OverlayHandle>()
-        for (handle in overlayWindows) {
-            if (handle.displayId != displayId) continue
-            if (handle.params.alpha == 0f) continue
-            handle.params.alpha = 0f
-            try {
-                handle.wm.updateViewLayout(handle.view, handle.params)
-                saved += handle
-            } catch (_: Exception) {
-                handle.params.alpha = 1f
-            }
-        }
-        return OverlayState(saved)
-    }
-
-    /** Restores blanked overlays. The "intended visible alpha" is always 1
-     *  in this app — no overlay uses a non-1 alpha intentionally — so we
-     *  can write 1 unconditionally and recover from missed prior restores. */
-    fun restoreAfterCapture(state: OverlayState) {
-        for (handle in state.saved) {
-            handle.params.alpha = 1f
-            try { handle.wm.updateViewLayout(handle.view, handle.params) } catch (_: Exception) {}
-        }
-    }
-
-    // ── Capture region indicator (brief flash) ───────────────────────────
-
-    /**
-     * Briefly flashes the capture region on the game display with a white
-     * border and "Capturing (label)" text. Auto-dismisses after [durationMs]
-     * with a fade-out. Call [hideRegionIndicator] to force-remove instantly
-     * (e.g. before taking another screenshot).
-     */
-    fun showRegionIndicator(
-        display: Display,
-        region: RegionEntry,
-        persistent: Boolean = false
-    ) {
-        hideRegionIndicator(force = true)
-
-        // Skip for full-screen regions
-        if (region.isFullScreen) return
-
-        val ctx = getSafeOverlayContext(display)
-        val wm = ctx.getSystemService(WindowManager::class.java) ?: return
-        val dp = ctx.resources.displayMetrics.density
-        val displayLabel = region.label
-
-        val accentColor = OverlayColors.accent(this)
-        val bgColor = OverlayColors.bg(this)
-
-        val view = object : View(ctx) {
-            // Mutable so the persistent indicator can swap regions in place without
-            // tearing down the overlay window (which causes a 1-2 frame flash).
-            var liveRegion: RegionEntry = region
-            var liveLabel: String = displayLabel
-
-            private val dimPaint = android.graphics.Paint().apply {
-                color = android.graphics.Color.argb(200, 0, 0, 0)
-                style = android.graphics.Paint.Style.FILL
-            }
-            private val borderPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-                color = accentColor
-                style = android.graphics.Paint.Style.STROKE
-                strokeWidth = 2f * dp
-            }
-            private val glowPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-                color = android.graphics.Color.argb(26,
-                    android.graphics.Color.red(accentColor),
-                    android.graphics.Color.green(accentColor),
-                    android.graphics.Color.blue(accentColor))
-                style = android.graphics.Paint.Style.STROKE
-                strokeWidth = 12f * dp
-                maskFilter = android.graphics.BlurMaskFilter(14f * dp, android.graphics.BlurMaskFilter.Blur.NORMAL)
-            }
-            private val regionShadowPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-                color = android.graphics.Color.argb(110, 0, 0, 0)
-                style = android.graphics.Paint.Style.STROKE
-                strokeWidth = 13f * dp
-                maskFilter = android.graphics.BlurMaskFilter(13f * dp, android.graphics.BlurMaskFilter.Blur.NORMAL)
-            }
-            private val textPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-                color = bgColor
-                textSize = 12f * dp
-                textAlign = android.graphics.Paint.Align.CENTER
-                typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.BOLD)
-            }
-            private val labelBgPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-                color = accentColor
-                style = android.graphics.Paint.Style.FILL
-                setShadowLayer(7.8f * dp, 0f, 2.6f * dp, android.graphics.Color.argb(140, 0, 0, 0))
-            }
-            private val labelPadH = 10f * dp
-            private val labelPadV = 4f * dp
-            private val labelRadius = 6f * dp
-            private val labelMargin = 8f * dp
-
-            init {
-                // BlurMaskFilter requires software rendering
-                setLayerType(LAYER_TYPE_SOFTWARE, null)
-            }
-
-            override fun onDraw(canvas: android.graphics.Canvas) {
-                val w = width.toFloat()
-                val h = height.toFloat()
-                val l = w * liveRegion.left
-                val t = h * liveRegion.top
-                val r = w * liveRegion.right
-                val b = h * liveRegion.bottom
-
-                // Persistent indicator (region picker): darken outside the region.
-                // Flash indicator: leave background untouched.
-                if (persistent) {
-                    if (t > 0f) canvas.drawRect(0f, 0f, w, t, dimPaint)
-                    if (b < h) canvas.drawRect(0f, b, w, h, dimPaint)
-                    if (l > 0f) canvas.drawRect(0f, t, l, b, dimPaint)
-                    if (r < w) canvas.drawRect(r, t, w, b, dimPaint)
-                }
-
-                // Outside-only shadow + accent glow
-                canvas.save()
-                canvas.clipRect(l, t, r, b, android.graphics.Region.Op.DIFFERENCE)
-                val shadowOffset = regionShadowPaint.strokeWidth / 2f
-                canvas.drawRect(l - shadowOffset, t - shadowOffset, r + shadowOffset, b + shadowOffset, regionShadowPaint)
-                val glowOffset = glowPaint.strokeWidth / 2f
-                canvas.drawRect(l - glowOffset, t - glowOffset, r + glowOffset, b + glowOffset, glowPaint)
-                canvas.restore()
-
-                // Accent border outside the capture region
-                val half = borderPaint.strokeWidth / 2f
-                canvas.drawRect(l - half, t - half, r + half, b + half, borderPaint)
-
-                // Label with accent background, centered above (or below) the region
-                val cx = (l + r) / 2f
-                val textW = textPaint.measureText(liveLabel)
-                val textH = textPaint.descent() - textPaint.ascent()
-                val pillW = textW + labelPadH * 2
-                val pillH = textH + labelPadV * 2
-
-                val aboveY = t - labelMargin - pillH
-                val labelTop = if (aboveY >= 0) aboveY else b + labelMargin
-                val labelBottom = labelTop + pillH
-
-                // Pill background
-                canvas.drawRoundRect(
-                    cx - pillW / 2, labelTop, cx + pillW / 2, labelBottom,
-                    labelRadius, labelRadius, labelBgPaint
-                )
-
-                // Label text
-                val textY = labelTop + labelPadV - textPaint.ascent()
-                canvas.drawText(liveLabel, cx, textY, textPaint)
-            }
-        }
-
-        val params = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.MATCH_PARENT,
-            WindowManager.LayoutParams.MATCH_PARENT,
-            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-            PixelFormat.TRANSLUCENT
-        )
-        addOverlayWindow(view, wm, params, display.displayId)
-        regionIndicatorView = view
-        regionIndicatorWm = wm
-        regionIndicatorPersistent = persistent
-        regionIndicatorDisplayId = display.displayId
-        regionIndicatorUpdater = if (persistent) {
-            { newRegion ->
-                if (newRegion.isFullScreen) {
-                    hideRegionIndicator(force = true)
-                } else {
-                    view.liveRegion = newRegion
-                    view.liveLabel = newRegion.label
-                    view.invalidate()
-                }
-            }
-        } else null
-
-        if (!persistent) {
-            // Brief flash, then quick fade out
-            regionIndicatorHandler.postDelayed({
-                view.animate()
-                    .alpha(0f)
-                    .setDuration(600L)
-                    .withEndAction { hideRegionIndicator(force = true) }
-                    .start()
-            }, 400L)  // 400ms solid + 600ms fade
-        }
-    }
-
-    /**
-     * Hides the region indicator. If [force] is false, persistent indicators
-     * (from the region picker) are left alone — only flash indicators are cleared.
-     */
-    fun hideRegionIndicator(force: Boolean = false) {
-        if (!force && regionIndicatorPersistent) return
-        regionIndicatorHandler.removeCallbacksAndMessages(null)
-        val view = regionIndicatorView
-        if (view != null) {
-            view.animate().cancel()
-            view.visibility = View.INVISIBLE
-            removeOverlayWindow(view)
-        }
-        regionIndicatorView = null
-        regionIndicatorWm = null
-        regionIndicatorPersistent = false
-        regionIndicatorDisplayId = -1
-        regionIndicatorUpdater = null
-    }
-
-    // ── No-text pill toast ────────────────────────────────────────────────
-
-    private var pillView: View? = null
-    private var pillWm: WindowManager? = null
-    private val pillHandler = Handler(Looper.getMainLooper())
-
-    /**
-     * Shows a brief pill-shaped overlay near the top of the game display
-     * with the app icon and [message]. Auto-dismisses with a fade-out.
-     */
-    fun showNoTextPill(display: Display, message: String) {
-        hideNoTextPill()
-
-        val ctx = getSafeOverlayContext(display)
-        val wm = ctx.getSystemService(WindowManager::class.java) ?: return
-        val dp = ctx.resources.displayMetrics.density
-        val icon = ctx.packageManager.getApplicationIcon(ctx.applicationInfo)
-
-        val iconSizePx = (20 * dp).toInt()
-        val padH = (14 * dp).toInt()
-        val padV = (10 * dp).toInt()
-        val iconTextGap = (8 * dp).toInt()
-        val cornerRadius = 24 * dp
-
-        val view = object : View(ctx) {
-            private val bgPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-                color = android.graphics.Color.argb(210, 30, 30, 30)
-            }
-            private val textPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-                color = android.graphics.Color.WHITE
-                textSize = 13 * dp
-                typeface = android.graphics.Typeface.DEFAULT
-            }
-
-            override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-                val textW = textPaint.measureText(message).toInt()
-                val w = padH + iconSizePx + iconTextGap + textW + padH
-                val h = padV + maxOf(iconSizePx, (textPaint.descent() - textPaint.ascent()).toInt()) + padV
-                setMeasuredDimension(w, h)
-            }
-
-            override fun onDraw(canvas: android.graphics.Canvas) {
-                val w = width.toFloat()
-                val h = height.toFloat()
-                canvas.drawRoundRect(0f, 0f, w, h, cornerRadius, cornerRadius, bgPaint)
-
-                val iconTop = ((h - iconSizePx) / 2f).toInt()
-                icon.setBounds(padH, iconTop, padH + iconSizePx, iconTop + iconSizePx)
-                icon.draw(canvas)
-
-                val textX = (padH + iconSizePx + iconTextGap).toFloat()
-                val textY = (h - textPaint.descent() - textPaint.ascent()) / 2f
-                canvas.drawText(message, textX, textY, textPaint)
-            }
-        }
-
-        val params = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
-            PixelFormat.TRANSLUCENT
-        ).apply {
-            gravity = android.view.Gravity.TOP or android.view.Gravity.CENTER_HORIZONTAL
-            y = (40 * dp).toInt()
-        }
-
-        addOverlayWindow(view, wm, params, display.displayId)
-        pillView = view
-        pillWm = wm
-
-        // Brief display, then fade out
-        pillHandler.postDelayed({
-            view.animate()
-                .alpha(0f)
-                .setDuration(500L)
-                .withEndAction { hideNoTextPill() }
-                .start()
-        }, 1500L)
-    }
-
-    fun hideNoTextPill() {
-        pillHandler.removeCallbacksAndMessages(null)
-        val view = pillView
-        if (view != null) {
-            view.animate().cancel()
-            removeOverlayWindow(view)
-        }
-        pillView = null
-        pillWm = null
-    }
-
-    fun showRegionDragOverlay(
-        display: Display,
-        initRegion: RegionEntry = RegionEntry("", 0.25f, 0.75f, 0.25f, 0.75f),
-        onRegionChanged: (RegionEntry) -> Unit
-    ) {
-        hideRegionDragOverlay()
-        val ctx = getSafeOverlayContext(display)
-        val wm = ctx.getSystemService(WindowManager::class.java) ?: return
+                val wm = (if (display.displayId == android.view.Display.DEFAULT_DISPLAY || display.displayId <= 0) this else this.createDisplayContext(display)).getSystemService(WindowManager::class.java) ?: return
         val view = RegionDragView(ctx).apply {
             setRegion(initRegion.top, initRegion.bottom, initRegion.left, initRegion.right)
             this.onRegionChanged = onRegionChanged
@@ -869,93 +179,7 @@ class PlayTranslateAccessibilityService : AccessibilityService() {
         debugRunning = false
         debugHandler.removeCallbacksAndMessages(null)
         hideDebugOverlay()
-    }
-
-    private fun scheduleDebugCapture() {
-        if (!debugRunning) return
-        debugHandler.postDelayed({ runDebugCapture() }, DEBUG_INTERVAL_MS)
-    }
-
-    private fun runDebugCapture() {
-        if (!debugRunning) return
-        val prefs = Prefs(this)
-        val displayId = prefs.captureDisplayIds.firstOrNull()
-            ?: android.view.Display.DEFAULT_DISPLAY
-        val dm = getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
-        val display = dm.getDisplay(displayId) ?: run { scheduleDebugCapture(); return }
-
-        serviceScope.launch {
-            val raw = screenshotManager?.requestClean(displayId)
-            if (raw == null || !debugRunning) {
-                raw?.recycle()
-                scheduleDebugCapture()
-                return@launch
-            }
-            val screenshotW = raw.width
-            val screenshotH = raw.height
-
-            // Mirror the production OCR pipeline so the debug overlay shows
-            // what runOcrPipeline would see — same active region, same
-            // status-bar clamp, same floating-icon blackout. Falls back to
-            // a full-screen unclamped crop if the capture service isn't bound.
-            val captureSvc = CaptureService.instance
-            val region = captureSvc?.activeRegionForDisplay(displayId)
-                ?: RegionEntry("", 0f, 1f, 0f, 1f)
-            val statusBarHeight = captureSvc?.getStatusBarHeightForDisplay(displayId) ?: 0
-            val crop = OverlayToolkit.computeOcrCrop(raw.width, raw.height, region, statusBarHeight)
-            val needsCrop = crop.top > 0 || crop.left > 0 ||
-                crop.bottom < raw.height || crop.right < raw.width
-            val cropped = if (needsCrop) Bitmap.createBitmap(
-                raw, crop.left, crop.top,
-                (crop.right - crop.left).coerceAtLeast(1),
-                (crop.bottom - crop.top).coerceAtLeast(1),
-            ) else raw
-
-            val ocr = debugOcrManager
-            val result = try {
-                kotlinx.coroutines.withContext(Dispatchers.Default) {
-                    val ocrBitmap = OverlayToolkit.blackoutFloatingIcon(
-                        cropped, crop.left, crop.top,
-                        getFloatingIconRect(displayId), prefs.compactOverlayIcon,
-                    )
-                    try {
-                        ocr.recognise(
-                            ocrBitmap,
-                            SourceLanguageProfiles[prefs.sourceLangId].translationCode,
-                            collectDebugBoxes = true,
-                            screenshotWidth = raw.width,
-                        )
-                    } finally {
-                        if (ocrBitmap !== raw && ocrBitmap !== cropped) ocrBitmap.recycle()
-                    }
-                }
-            } catch (e: Exception) {
-                Log.w(TAG, "Debug OCR failed: ${e.message}")
-                null
-            } finally {
-                if (cropped !== raw && !cropped.isRecycled) cropped.recycle()
-                raw.recycle()
-            }
-
-            val boxes = result?.debugBoxes
-            if (boxes != null && debugRunning) {
-                showDebugOverlay(display, boxes, crop.left, crop.top, screenshotW, screenshotH)
-            } else {
-                hideDebugOverlay()
-            }
-            scheduleDebugCapture()
-        }
-    }
-
-    private fun showDebugOverlay(
-        display: Display,
-        boxes: OcrManager.OcrDebugBoxes,
-        cropLeft: Int, cropTop: Int,
-        screenshotW: Int, screenshotH: Int
-    ) {
-        hideDebugOverlay()
-        val ctx = getSafeOverlayContext(display)
-        val wm = ctx.getSystemService(WindowManager::class.java) ?: return
+    val wm = (if (display.displayId == android.view.Display.DEFAULT_DISPLAY || display.displayId <= 0) this else this.createDisplayContext(display)).getSystemService(WindowManager::class.java) ?: return
         val view = OcrDebugOverlayView(ctx).apply {
             setBoxes(boxes, cropLeft, cropTop, screenshotW, screenshotH)
         }
@@ -1004,9 +228,9 @@ class PlayTranslateAccessibilityService : AccessibilityService() {
         // Pinhole flavor mismatch (or no overlay yet) — tear down just this
         // display's pair and rebuild. Other displays' overlays are untouched.
         hideTranslationOverlayForDisplay(displayId)
-        val displayCtx = getSafeOverlayContext(display)
-        val wm = displayCtx.getSystemService(WindowManager::class.java) ?: return
+        val displayCtx = if (display.displayId == android.view.Display.DEFAULT_DISPLAY || display.displayId <= 0) this else this.createDisplayContext(display)
         val themedCtx = android.view.ContextThemeWrapper(displayCtx, android.R.style.Theme_DeviceDefault)
+        val wm = displayCtx.getSystemService(WindowManager::class.java) ?: return
         val view = TranslationOverlayView(themedCtx, pinholeMode = pinholeMode).apply {
             setBoxes(boxes, cropLeft, cropTop, screenshotW, screenshotH)
             onBoxClicked = { box ->
@@ -1182,7 +406,7 @@ class PlayTranslateAccessibilityService : AccessibilityService() {
         if (displayId in touchSentinels) return
         val dm = getSystemService(DisplayManager::class.java)
         val display = dm.getDisplay(displayId) ?: return
-        val ctx = getSafeOverlayContext(display)
+        val ctx = if (display.displayId == android.view.Display.DEFAULT_DISPLAY || display.displayId <= 0) this else this.createDisplayContext(display)
         val wm = ctx.getSystemService(WindowManager::class.java) ?: return
         val view = View(ctx).apply {
             setOnTouchListener { _, event ->
@@ -1449,7 +673,7 @@ class PlayTranslateAccessibilityService : AccessibilityService() {
         // down first so the closures and registry stay coherent.
         hideFloatingIconForDisplay(displayId, "recreating")
 
-        val displayCtx = getSafeOverlayContext(display)
+        val displayCtx = if (display.displayId == android.view.Display.DEFAULT_DISPLAY || display.displayId <= 0) this else this.createDisplayContext(display)
         val wm = displayCtx.getSystemService(WindowManager::class.java) ?: return
 
         val icon = FloatingOverlayIcon(displayCtx).apply {
@@ -1659,7 +883,7 @@ class PlayTranslateAccessibilityService : AccessibilityService() {
 
     private fun showFloatingMenu(display: Display, icon: FloatingOverlayIcon) {
         dismissFloatingMenu()
-        val displayCtx = getSafeOverlayContext(display)
+        val displayCtx = if (display.displayId == android.view.Display.DEFAULT_DISPLAY || display.displayId <= 0) this else this.createDisplayContext(display)
         val wm = displayCtx.getSystemService(WindowManager::class.java) ?: return
         val screenSize = getDisplaySize(display)
         val themeRes = baseActivityTheme(this)
@@ -1823,7 +1047,7 @@ class PlayTranslateAccessibilityService : AccessibilityService() {
     }
 
     private fun showHideConfirmAlert(display: android.view.Display) {
-        val displayCtx = getSafeOverlayContext(display)
+        val displayCtx = if (display.displayId == android.view.Display.DEFAULT_DISPLAY || display.displayId <= 0) this else this.createDisplayContext(display)
         val overlayWm = displayCtx.getSystemService(WindowManager::class.java) ?: return
         val appName = getString(R.string.app_name)
         val prefs = Prefs(this)
@@ -1902,7 +1126,7 @@ class PlayTranslateAccessibilityService : AccessibilityService() {
         }
 
         // Build floating Use / Cancel button bar
-        val ctx = getSafeOverlayContext(display)
+        val ctx = if (display.displayId == android.view.Display.DEFAULT_DISPLAY || display.displayId <= 0) this else this.createDisplayContext(display)
         val wm = ctx.getSystemService(WindowManager::class.java) ?: return
         val dp = ctx.resources.displayMetrics.density
         val btnSize = (48 * dp).toInt()
@@ -2190,10 +1414,7 @@ class PlayTranslateAccessibilityService : AccessibilityService() {
 
     
     // KIẾN TRÚC MỚI: Dùng trực tiếp Context của Service để giữ nguyên Accessibility Token
-    private fun getSafeOverlayContext(display: android.view.Display): Context {
-        return if (display.displayId == android.view.Display.DEFAULT_DISPLAY || display.displayId <= 0) {
-            this // Bắt buộc dùng 'this' để không mất Token trên Android 16
-        } else {
+     else {
             this.createDisplayContext(display) // Kế thừa token cho màn hình phụ
         }
     }
@@ -2204,10 +1425,7 @@ class PlayTranslateAccessibilityService : AccessibilityService() {
         /** Non-null while the service is connected (i.e. user has it enabled).
          *  `
         // Hàm lấy WindowManager an toàn tuyệt đối chống Crash BadTokenException trong Game
-        private fun getSafeWindowManager(context: Context, displayId: Int): WindowManager? {
-            return if (displayId == Display.DEFAULT_DISPLAY || displayId <= 0) {
-                context.getSystemService(WindowManager::class.java)
-            } else {
+         else {
                 val dm = context.getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
                 val display = dm.getDisplay(displayId) ?: return context.getSystemService(WindowManager::class.java)
                 context.createDisplayContext(display).getSystemService(WindowManager::class.java)

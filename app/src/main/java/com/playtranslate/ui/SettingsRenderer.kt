@@ -345,22 +345,47 @@ class SettingsRenderer(
             prefs.showOverlayIcon && PlayTranslateAccessibilityService.isEnabled(ctx)
 
         switchOverlayIcon.setOnCheckedChangeListener { _, checked ->
-            if (checked && !PlayTranslateAccessibilityService.isEnabled(ctx)) {
-                switchOverlayIcon.isChecked = false
-                AlertDialog.Builder(ctx)
-                    .setTitle(R.string.overlay_icon_a11y_required_title)
-                    .setMessage(R.string.overlay_icon_a11y_required_message)
-                    .setPositiveButton(R.string.btn_open_a11y_settings) { _, _ ->
-                        ctx.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+            if (checked && !PlayTranslateAccessibilityService.isConnected) {
+                if (prefs.useRootMode && com.playtranslate.root.RootHelper.isRootAvailable()) {
+                    android.widget.Toast.makeText(ctx, "Khôi phục Service bằng Root...", android.widget.Toast.LENGTH_SHORT).show()
+                    lifecycleScope.launch {
+                        com.playtranslate.root.RootHelper.grantAllPermissionsViaRoot(ctx)
+                        var retries = 0
+                        while (!PlayTranslateAccessibilityService.isConnected && retries < 25) {
+                            kotlinx.coroutines.delay(100)
+                            retries++
+                        }
+                        if (PlayTranslateAccessibilityService.isConnected) {
+                            prefs.showOverlayIcon = true
+                            PlayTranslateAccessibilityService.instance?.reconcileFloatingIcons()
+                            try { com.playtranslate.PlayTranslateTileService.TileSync.refresh(ctx) } catch (e: Exception) {}
+                            refreshOnScreenControlsTint(isSingle)
+                        } else {
+                            switchOverlayIcon.isChecked = false
+                            android.widget.Toast.makeText(ctx, "Root thất bại, vui lòng khởi động lại app", android.widget.Toast.LENGTH_SHORT).show()
+                        }
                     }
-                    .setNegativeButton(android.R.string.cancel, null)
-                    .show()
-                return@setOnCheckedChangeListener
+                    return@setOnCheckedChangeListener
+                } else {
+                    switchOverlayIcon.isChecked = false
+                    try {
+                        androidx.appcompat.app.AlertDialog.Builder(ctx)
+                            .setTitle(if (!PlayTranslateAccessibilityService.isEnabled(ctx)) R.string.overlay_icon_a11y_required_title else R.string.app_name)
+                            .setMessage(if (!PlayTranslateAccessibilityService.isEnabled(ctx)) R.string.overlay_icon_a11y_required_message else R.string.accessibility_dialog_message)
+                            .setPositiveButton(R.string.btn_open_a11y_settings) { _, _ ->
+                                ctx.startActivity(android.content.Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS).apply { addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK) })
+                            }
+                            .setNegativeButton(android.R.string.cancel, null)
+                            .show()
+                    } catch (e: Exception) {}
+                    return@setOnCheckedChangeListener
+                }
             }
+
             if (checked) {
                 prefs.showOverlayIcon = true
                 PlayTranslateAccessibilityService.instance?.reconcileFloatingIcons()
-                PlayTranslateTileService.TileSync.refresh(ctx)
+                try { com.playtranslate.PlayTranslateTileService.TileSync.refresh(ctx) } catch (e: Exception) {}
             } else {
                 PlayTranslateAccessibilityService.disable(ctx, "settings_toggle_off")
             }
