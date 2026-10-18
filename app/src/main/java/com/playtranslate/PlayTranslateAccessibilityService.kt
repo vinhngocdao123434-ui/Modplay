@@ -933,6 +933,7 @@ class PlayTranslateAccessibilityService : AccessibilityService() {
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
             baseFlags,
             PixelFormat.TRANSLUCENT
         ).apply { windowAnimations = 0 }

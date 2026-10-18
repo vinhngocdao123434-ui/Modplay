@@ -1,5 +1,7 @@
 package com.playtranslate.ui
 
+import com.playtranslate.Prefs
+
 import android.animation.ValueAnimator
 import android.content.Context
 import android.graphics.Canvas

@@ -1,5 +1,7 @@
 package com.playtranslate
 
+import android.graphics.Rect
+
 import android.app.Notification
 import android.app.NotificationChannel
 import android.graphics.Bitmap
