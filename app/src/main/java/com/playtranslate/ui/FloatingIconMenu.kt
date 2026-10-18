@@ -62,6 +62,7 @@ class FloatingIconMenu(context: Context) : FrameLayout(context) {
     var onCaptureRegion: (() -> Unit)? = null
     var onSetTtsZone: (() -> Unit)? = null
     var onToggleInspectMode: (() -> Unit)? = null
+    var onOpenTtsSettings: (() -> Unit)? = null
     var onSettings: (() -> Unit)? = null
     var isSingleScreen: Boolean = false
 
@@ -323,6 +324,46 @@ class FloatingIconMenu(context: Context) : FrameLayout(context) {
         ttsZoneGroup.addView(ttsZoneBtn)
         ttsZoneGroup.addView(ttsZoneLabel)
         menuCard.addView(ttsZoneGroup)
+
+        // TTS Settings Button in Floating Menu
+        val ttsSetGroup = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { bottomMargin = (10 * dp).toInt() }
+        }
+        val ttsSetBtn = FrameLayout(context).apply {
+            background = GradientDrawable().apply {
+                setColor(cardColor)
+                cornerRadius = 14 * dp
+            }
+            elevation = 4 * dp
+            layoutParams = LinearLayout.LayoutParams(btnSize, btnSize).apply {
+                gravity = Gravity.CENTER_HORIZONTAL
+            }
+            setOnClickListener { onOpenTtsSettings?.invoke() }
+        }
+        val ttsSetIcon = ImageView(context).apply {
+            setImageResource(android.R.drawable.ic_lock_silent_mode_off)
+            imageTintList = android.content.res.ColorStateList.valueOf(textColor)
+            scaleType = ImageView.ScaleType.CENTER_INSIDE
+            setPadding(iconPad, iconPad, iconPad, iconPad)
+        }
+        ttsSetBtn.addView(ttsSetIcon, LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        val ttsSetLabel = TextView(context).apply {
+            text = "TTS Settings"
+            setTextColor(textColor)
+            textSize = 9f
+            gravity = Gravity.CENTER_HORIZONTAL
+            setTypeface(null, Typeface.BOLD)
+            maxWidth = btnSize
+        }
+        ttsSetGroup.addView(ttsSetBtn)
+        ttsSetGroup.addView(ttsSetLabel)
+        menuCard.addView(ttsSetGroup)
+
 
         // Capture Region button + label
         val regionGroup = LinearLayout(context).apply {

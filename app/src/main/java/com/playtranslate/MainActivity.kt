@@ -410,6 +410,9 @@ class MainActivity :
                 // the icon's display isn't the service primary.
                 refreshRegionPicker()
             }
+            "com.playtranslate.ACTION_OPEN_TTS_SETTINGS" -> {
+                com.playtranslate.ui.TtsSettingsDialog.newInstance().show(supportFragmentManager, com.playtranslate.ui.TtsSettingsDialog.TAG)
+            }
             ACTION_OPEN_SETTINGS -> {
                 selectTab(Tab.SETTINGS)
                 openSettingsInline()

@@ -541,6 +541,24 @@ class PinholeOverlayMode(
                         val mergedFinal = existing + translated
                         cachedBoxes = mergedFinal
                         showOverlayAndCapture(a11y, mergedFinal, cropLeft, cropTop, screenshotW, screenshotH)
+
+                    // Kích hoạt đọc TTS trực tiếp nếu bật
+                    if (Prefs(service).ttsAutoSpeakEnabled && mergedFinal.isNotEmpty()) {
+                        val zone = Prefs(service).getTtsZone()
+                        val zoneRect = Rect(
+                            (zone.left * screenshotW).toInt(),
+                            (zone.top * screenshotH).toInt(),
+                            (zone.right * screenshotW).toInt(),
+                            (zone.bottom * screenshotH).toInt()
+                        )
+                        val toSpeak = mergedFinal.filter { b ->
+                            b.translatedText.isNotBlank() && Rect.intersects(b.bounds, zoneRect)
+                        }.map { it.translatedText }
+                        if (toSpeak.isNotEmpty()) {
+                            com.playtranslate.tts.TtsManager.getInstance(service).speak(toSpeak.joinToString(". "))
+                        }
+                    }
+
                     }
 
                 }

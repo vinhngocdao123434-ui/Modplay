@@ -63,6 +63,55 @@ import kotlinx.coroutines.launch
  */
 class PlayTranslateAccessibilityService : AccessibilityService() {
 
+    private val inspectWindows = mutableListOf<View>()
+
+    fun updateInspectClickableBoxes(display: Display, boxes: List<TranslationOverlayView.TextBox>, cropLeft: Int, cropTop: Int) {
+        clearInspectClickableBoxes()
+        if (!Prefs(this).inspectModeEnabled || boxes.isEmpty()) return
+        val ctx = createDisplayContext(display)
+        val wm = ctx.getSystemService(WindowManager::class.java) ?: return
+
+        for (box in boxes) {
+            if (box.translatedText.isBlank()) continue
+            val b = box.bounds
+            val clickable = View(ctx).apply {
+                isClickable = true
+                setOnClickListener {
+                    com.playtranslate.ui.TranslationBoxDetailOverlay(
+                        this@PlayTranslateAccessibilityService,
+                        wm,
+                        display.displayId,
+                        box.sourceText,
+                        box.translatedText
+                    ).show()
+                }
+            }
+            val w = b.width().coerceAtLeast(10)
+            val h = b.height().coerceAtLeast(10)
+            val lp = WindowManager.LayoutParams(
+                w, h,
+                WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                PixelFormat.TRANSLUCENT
+            ).apply {
+                gravity = Gravity.TOP or Gravity.START
+                x = b.left + cropLeft
+                y = b.top + cropTop
+            }
+            if (addOverlayWindow(clickable, wm, lp, display.displayId)) {
+                inspectWindows.add(clickable)
+            }
+        }
+    }
+
+    fun clearInspectClickableBoxes() {
+        for (v in inspectWindows) {
+            removeOverlayWindow(v)
+        }
+        inspectWindows.clear()
+    }
+
+
     fun showTtsZoneEditor(display: Display) {
         val prefs = Prefs(this)
         val currentZone = prefs.getTtsZone()
@@ -994,12 +1043,7 @@ class PlayTranslateAccessibilityService : AccessibilityService() {
                 ).show()
             }
         }
-        val isInspect = Prefs(this).inspectModeEnabled
-        val baseFlags = if (isInspect) {
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
-        } else {
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
-        }
+        val baseFlags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.MATCH_PARENT,
@@ -1024,6 +1068,7 @@ class PlayTranslateAccessibilityService : AccessibilityService() {
         addOverlayWindow(dirtyView, wm, dirtyParams, displayId)
 
         translationOverlayHandles[displayId] = TranslationOverlayHandle(view, dirtyView)
+        updateInspectClickableBoxes(display, boxes, cropLeft, cropTop)
     }
 
     /**
@@ -1747,6 +1792,14 @@ class PlayTranslateAccessibilityService : AccessibilityService() {
             CaptureService.instance?.refreshLiveOverlay()
         }
         menu.onSetTtsZone = { dismissFloatingMenu(); showTtsZoneEditor(display) }
+        menu.onOpenTtsSettings = {
+            dismissFloatingMenu()
+            val intent = Intent(this@PlayTranslateAccessibilityService, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                action = "com.playtranslate.ACTION_OPEN_TTS_SETTINGS"
+            }
+            startActivity(intent)
+        }
         menu.onCaptureRegion = {
             dismissFloatingMenu()
             val effectivelySingleScreen = Prefs.isSingleScreen(this) || !MainActivity.isInForeground
