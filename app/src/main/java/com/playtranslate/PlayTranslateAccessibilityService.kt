@@ -63,17 +63,33 @@ import kotlinx.coroutines.launch
  */
 class PlayTranslateAccessibilityService : AccessibilityService() {
 
+    
     private val inspectWindows = mutableListOf<View>()
 
-    fun updateInspectClickableBoxes(display: Display, boxes: List<TranslationOverlayView.TextBox>, cropLeft: Int, cropTop: Int) {
+    fun updateInspectClickableBoxes(
+        display: Display,
+        boxes: List<TranslationOverlayView.TextBox>,
+        cropLeft: Int, cropTop: Int,
+        screenshotW: Int, screenshotH: Int
+    ) {
         clearInspectClickableBoxes()
         if (!Prefs(this).inspectModeEnabled || boxes.isEmpty()) return
         val ctx = createDisplayContext(display)
         val wm = ctx.getSystemService(WindowManager::class.java) ?: return
+        val dm = resources.displayMetrics
+        val scaleX = dm.widthPixels.toFloat() / screenshotW
+        val scaleY = dm.heightPixels.toFloat() / screenshotH
 
         for (box in boxes) {
             if (box.translatedText.isBlank()) continue
             val b = box.bounds
+            val left = ((b.left + cropLeft) * scaleX).toInt()
+            val top = ((b.top + cropTop) * scaleY).toInt()
+            val right = ((b.right + cropLeft) * scaleX).toInt()
+            val bottom = ((b.bottom + cropTop) * scaleY).toInt()
+            val w = (right - left).coerceAtLeast(20)
+            val h = (bottom - top).coerceAtLeast(20)
+
             val clickable = View(ctx).apply {
                 isClickable = true
                 setOnClickListener {
@@ -86,8 +102,6 @@ class PlayTranslateAccessibilityService : AccessibilityService() {
                     ).show()
                 }
             }
-            val w = b.width().coerceAtLeast(10)
-            val h = b.height().coerceAtLeast(10)
             val lp = WindowManager.LayoutParams(
                 w, h,
                 WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
@@ -95,8 +109,8 @@ class PlayTranslateAccessibilityService : AccessibilityService() {
                 PixelFormat.TRANSLUCENT
             ).apply {
                 gravity = Gravity.TOP or Gravity.START
-                x = b.left + cropLeft
-                y = b.top + cropTop
+                x = left
+                y = top
             }
             if (addOverlayWindow(clickable, wm, lp, display.displayId)) {
                 inspectWindows.add(clickable)
@@ -112,6 +126,8 @@ class PlayTranslateAccessibilityService : AccessibilityService() {
     }
 
 
+
+    
     fun showTtsZoneEditor(display: Display) {
         val prefs = Prefs(this)
         val currentZone = prefs.getTtsZone()
@@ -124,7 +140,6 @@ class PlayTranslateAccessibilityService : AccessibilityService() {
         val ctx = createDisplayContext(display)
         val wm = ctx.getSystemService(WindowManager::class.java) ?: return
         val dp = ctx.resources.displayMetrics.density
-        val btnSize = (48 * dp).toInt()
 
         val bar = android.widget.LinearLayout(ctx).apply {
             orientation = android.widget.LinearLayout.HORIZONTAL
@@ -178,6 +193,7 @@ class PlayTranslateAccessibilityService : AccessibilityService() {
         }
         addOverlayWindow(bar, wm, barParams, display.displayId)
     }
+
 
 
     private var dragView: RegionDragView? = null
@@ -1048,7 +1064,9 @@ class PlayTranslateAccessibilityService : AccessibilityService() {
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
-            baseFlags,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT
         ).apply { windowAnimations = 0 }
         addOverlayWindow(view, wm, params, displayId)
@@ -1068,7 +1086,7 @@ class PlayTranslateAccessibilityService : AccessibilityService() {
         addOverlayWindow(dirtyView, wm, dirtyParams, displayId)
 
         translationOverlayHandles[displayId] = TranslationOverlayHandle(view, dirtyView)
-        updateInspectClickableBoxes(display, boxes, cropLeft, cropTop)
+        updateInspectClickableBoxes(display, boxes, cropLeft, cropTop, screenshotW, screenshotH)
     }
 
     /**

@@ -123,9 +123,7 @@ class TranslationBoxDetailOverlay(
                 ViewGroup.LayoutParams.WRAP_CONTENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply { gravity = Gravity.END }
-            setOnClickListener {
-                copy(rawText, "Raw text copied")
-            }
+            setOnClickListener { copy(rawText, "Raw text copied") }
         }
         rawCard.addView(btnCopyRaw)
         card.addView(rawCard)
@@ -166,9 +164,7 @@ class TranslationBoxDetailOverlay(
                 ViewGroup.LayoutParams.WRAP_CONTENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply { gravity = Gravity.END }
-            setOnClickListener {
-                copy(translatedText, "Translation copied")
-            }
+            setOnClickListener { copy(translatedText, "Translation copied") }
         }
         transCard.addView(btnCopyTrans)
         card.addView(transCard)
@@ -183,7 +179,7 @@ class TranslationBoxDetailOverlay(
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
-            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT
         )
         if (PlayTranslateAccessibilityService.addOverlay(scrim, wm, params, displayId)) {

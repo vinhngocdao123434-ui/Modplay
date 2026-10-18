@@ -81,20 +81,26 @@ class TtsManager private constructor(private val context: Context) {
     }
 
     fun speak(text: String, force: Boolean = false) {
-        if (text.isBlank()) return
-        if (!force && text == lastSpokenText) return
-        lastSpokenText = text
+        val trimmed = text.trim()
+        if (trimmed.isBlank()) return
+        // Chống đọc lặp: Chỉ đọc nếu nội dung thực sự thay đổi
+        if (!force && trimmed == lastSpokenText) return
+        lastSpokenText = trimmed
 
         val engineInstance = tts
         if (engineInstance != null && isInitialized) {
             applySettings()
-            engineInstance.speak(text, TextToSpeech.QUEUE_FLUSH, null, "PLAY_TRANSLATE_TTS")
+            engineInstance.speak(trimmed, TextToSpeech.QUEUE_FLUSH, null, "PLAY_TRANSLATE_TTS")
         }
     }
 
     fun stop() {
-        lastSpokenText = null
+        // Giữ nguyên lastSpokenText để khi quét lại khung hình đứng yên không bị đọc lặp
         tts?.stop()
+    }
+
+    fun resetLastSpoken() {
+        lastSpokenText = null
     }
 
     companion object {

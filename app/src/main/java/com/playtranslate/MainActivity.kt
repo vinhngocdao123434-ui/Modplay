@@ -1,5 +1,7 @@
 package com.playtranslate
 
+import com.playtranslate.ui.TtsSettingsDialog
+
 import android.Manifest
 import com.playtranslate.applyTheme
 import com.playtranslate.themeColor
@@ -1469,6 +1471,16 @@ class MainActivity :
             existingSheet?.dismissAllowingStateLoss()
             showOnboardingPage(pageWelcome)
             refreshWelcomeRowsAndButton()
+            return
+        }
+
+        
+        // Bỏ qua đòi Accessibility nếu máy đã bật Root mode
+        if (prefs.useRootMode && com.playtranslate.root.RootHelper.isRootAvailable()) {
+            lifecycleScope.launch {
+                com.playtranslate.root.RootHelper.grantAllPermissionsViaRoot(this@MainActivity)
+            }
+            onboardingContainer.visibility = View.GONE
             return
         }
 
