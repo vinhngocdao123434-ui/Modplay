@@ -1,5 +1,9 @@
 package com.playtranslate.ui
 
+import com.playtranslate.PlayTranslateAccessibilityService
+import com.playtranslate.CaptureService
+
+
 import com.playtranslate.Prefs
 
 import android.animation.ValueAnimator

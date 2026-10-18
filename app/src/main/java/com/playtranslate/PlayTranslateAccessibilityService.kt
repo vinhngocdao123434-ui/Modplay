@@ -1,5 +1,7 @@
 package com.playtranslate
 
+import android.graphics.Color
+
 import android.accessibilityservice.AccessibilityService
 import android.content.BroadcastReceiver
 import android.content.ComponentName
