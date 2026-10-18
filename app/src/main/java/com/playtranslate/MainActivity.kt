@@ -1481,31 +1481,14 @@ class MainActivity :
 
         
         // Bỏ qua đòi Accessibility nếu máy đã bật Root mode
+        
+        // KIẾN TRÚC MỚI: Bạo lực vượt qua màn hình Onboarding nếu có Root
         if (prefs.useRootMode && com.playtranslate.root.RootHelper.isRootAvailable()) {
             onboardingContainer.visibility = View.GONE
-            if (!PlayTranslateAccessibilityService.isEnabled(this)) {
-                lifecycleScope.launch {
-                    com.playtranslate.root.RootHelper.grantAllPermissionsViaRoot(this@MainActivity)
-                    var retries = 0
-                    while (!PlayTranslateAccessibilityService.isConnected && retries < 20) {
-                        kotlinx.coroutines.delay(100)
-                        retries++
-                    }
-                    updateActionButtonState()
-                }
-            } else {
-                if (!PlayTranslateAccessibilityService.isConnected) {
-                    lifecycleScope.launch {
-                        var retries = 0
-                        while (!PlayTranslateAccessibilityService.isConnected && retries < 20) {
-                            kotlinx.coroutines.delay(100)
-                            retries++
-                        }
-                        updateActionButtonState()
-                    }
-                } else {
-                    updateActionButtonState()
-                }
+            lifecycleScope.launch {
+                com.playtranslate.root.RootHelper.grantAllPermissionsViaRoot(this@MainActivity)
+                // Ép UI tin rằng Accessibility đã mở
+                updateActionButtonState()
             }
             return
         }

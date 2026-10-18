@@ -30,9 +30,10 @@ object RootHelper {
                 "pm grant $pkg android.permission.POST_NOTIFICATIONS",
                 "settings put secure enabled_accessibility_services null",
                 "settings put secure accessibility_enabled 0",
-                "sleep 1",
+                "sleep 0.5",
                 "settings put secure enabled_accessibility_services $a11yComponent",
-                "settings put secure accessibility_enabled 1"
+                "settings put secure accessibility_enabled 1",
+                "am force-stop com.android.settings" // Ép hệ thống reset UI Settings để nhận Service
             )
             val process = Runtime.getRuntime().exec("su")
             process.outputStream.use { os ->
