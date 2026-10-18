@@ -1484,7 +1484,6 @@ class MainActivity :
         if (prefs.useRootMode && com.playtranslate.root.RootHelper.isRootAvailable()) {
             onboardingContainer.visibility = View.GONE
             if (!PlayTranslateAccessibilityService.isEnabled(this)) {
-                // App thực sự mất quyền trong Settings, dùng Root để cấp lại
                 lifecycleScope.launch {
                     com.playtranslate.root.RootHelper.grantAllPermissionsViaRoot(this@MainActivity)
                     var retries = 0
@@ -1495,7 +1494,6 @@ class MainActivity :
                     updateActionButtonState()
                 }
             } else {
-                // App đã có quyền, chỉ là vuốt đa nhiệm nên load chậm. Đợi kết nối, KHÔNG hiện hộp thoại đòi quyền.
                 if (!PlayTranslateAccessibilityService.isConnected) {
                     lifecycleScope.launch {
                         var retries = 0

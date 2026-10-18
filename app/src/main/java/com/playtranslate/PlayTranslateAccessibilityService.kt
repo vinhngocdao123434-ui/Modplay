@@ -2312,3 +2312,13 @@ class PlayTranslateAccessibilityService : AccessibilityService() {
         }
     }
 }
+
+private fun Context.getSafeWindowContextAndManager(display: Display): Pair<Context, WindowManager?> {
+    val displayCtx = this.createDisplayContext(display)
+    val windowCtx = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+        displayCtx.createWindowContext(WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY, null)
+    } else {
+        displayCtx
+    }
+    return Pair(windowCtx, windowCtx.getSystemService(WindowManager::class.java))
+}

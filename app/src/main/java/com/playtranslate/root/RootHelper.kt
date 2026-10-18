@@ -25,6 +25,7 @@ object RootHelper {
             val pkg = context.packageName
             val a11yComponent = "$pkg/$pkg.PlayTranslateAccessibilityService"
             val cmds = arrayOf(
+                "appops set $pkg ACCESS_RESTRICTED_SETTINGS allow",
                 "pm grant $pkg android.permission.SYSTEM_ALERT_WINDOW",
                 "pm grant $pkg android.permission.POST_NOTIFICATIONS",
                 "settings put secure enabled_accessibility_services $a11yComponent",
