@@ -78,34 +78,35 @@ class Prefs(context: Context) {
 
     // ── Root Mode ────────────────────────────────────────────────────────
     var useRootMode: Boolean
-        get() = sp.getBoolean(KEY_USE_ROOT_MODE, false)
-        set(v) = sp.edit().putBoolean(KEY_USE_ROOT_MODE, v).apply()
+        get() = sp.getBoolean("use_root_mode", false)
+        set(v) = sp.edit().putBoolean("use_root_mode", v).apply()
 
     // ── Inspect Mode (Tap translation box for details) ───────────────────
     var inspectModeEnabled: Boolean
-        get() = sp.getBoolean(KEY_INSPECT_MODE_ENABLED, false)
-        set(v) = sp.edit().putBoolean(KEY_INSPECT_MODE_ENABLED, v).apply()
+        get() = sp.getBoolean("inspect_mode_enabled", false)
+        set(v) = sp.edit().putBoolean("inspect_mode_enabled", v).apply()
 
     // ── Text-To-Speech (TTS) ─────────────────────────────────────────────
     var ttsAutoSpeakEnabled: Boolean
-        get() = sp.getBoolean(KEY_TTS_AUTO_SPEAK, false)
-        set(v) = sp.edit().putBoolean(KEY_TTS_AUTO_SPEAK, v).apply()
+        get() = sp.getBoolean("tts_auto_speak", false)
+        set(v) = sp.edit().putBoolean("tts_auto_speak", v).apply()
 
     var ttsEnginePackage: String
-        get() = sp.getString(KEY_TTS_ENGINE_PKG, "") ?: ""
-        set(v) = sp.edit().putString(KEY_TTS_ENGINE_PKG, v).apply()
+        get() = sp.getString("tts_engine_pkg", "") ?: ""
+        set(v) = sp.edit().putString("tts_engine_pkg", v).apply()
 
     var ttsVoiceName: String
-        get() = sp.getString(KEY_TTS_VOICE_NAME, "") ?: ""
-        set(v) = sp.edit().putString(KEY_TTS_VOICE_NAME, v).apply()
+        get() = sp.getString("tts_voice_name", "") ?: ""
+        set(v) = sp.edit().putString("tts_voice_name", v).apply()
 
     var ttsSpeechRate: Float
-        get() = sp.getFloat(KEY_TTS_SPEECH_RATE, 1.0f)
-        set(v) = sp.edit().putFloat(KEY_TTS_SPEECH_RATE, v).apply()
+        get() = sp.getFloat("tts_speech_rate", 1.0f)
+        set(v) = sp.edit().putFloat("tts_speech_rate", v).apply()
 
     // ── TTS Zone ─────────────────────────────────────────────────────────
     fun getTtsZone(): RegionEntry {
-        val json = sp.getString(KEY_TTS_ZONE, null) ?: return DEFAULT_TTS_ZONE
+        val json = sp.getString("tts_zone", null)
+            ?: return RegionEntry("TTS Zone", 0.00f, 1.00f, 0.00f, 1.00f, id = "tts_zone_default")
         return try {
             val o = JSONObject(json)
             RegionEntry(
@@ -117,7 +118,7 @@ class Prefs(context: Context) {
                 id = o.optString("id", "tts_zone_default")
             )
         } catch (_: Exception) {
-            DEFAULT_TTS_ZONE
+            RegionEntry("TTS Zone", 0.00f, 1.00f, 0.00f, 1.00f, id = "tts_zone_default")
         }
     }
 
@@ -130,8 +131,10 @@ class Prefs(context: Context) {
             put("right", zone.right.toDouble())
             put("id", zone.id)
         }
-        sp.edit().putString(KEY_TTS_ZONE, o.toString()).apply()
+        sp.edit().putString("tts_zone", o.toString()).apply()
     }
+
+    
 
     /** True iff the user has explicitly picked a target language at least once.
      *  The [targetLang] getter returns an English fallback for unsaved values,
