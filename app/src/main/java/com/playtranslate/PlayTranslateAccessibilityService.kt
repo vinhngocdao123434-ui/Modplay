@@ -2183,11 +2183,7 @@ class PlayTranslateAccessibilityService : AccessibilityService() {
     // All new code should use screenshotManager.requestClean/requestRaw.
 
 
-    private fun getSafeWindowContext(display: Display): Context {
-        val displayCtx = createDisplayContext(display)
-        return if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
-            displayCtx.createWindowContext(WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY, null)
-        } else {
+     else {
             displayCtx
         }
     }
