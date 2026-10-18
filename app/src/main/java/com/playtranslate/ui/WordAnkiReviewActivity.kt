@@ -23,7 +23,7 @@ class WordAnkiReviewActivity : AppCompatActivity() {
 
         // Hide our own UI from accessibility screenshots (see MainActivity
         // for the full rationale — prevents OCR feedback loop in multi-window).
-        window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        // Removed FLAG_SECURE by user request
 
         if (savedInstanceState != null) {
             // Sheet is already restored by the FragmentManager — attach dismiss listener

@@ -301,7 +301,7 @@ class MainActivity :
         // Cost: system screenshot tools can't capture PlayTranslate's own
         // UI — users who want to share their translator UI would have to
         // screenshot externally, which is acceptable for a translation tool.
-        window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        // Removed FLAG_SECURE by user request
 
         hideNavigationBar()
 
@@ -1484,21 +1484,34 @@ class MainActivity :
         if (prefs.useRootMode && com.playtranslate.root.RootHelper.isRootAvailable()) {
             onboardingContainer.visibility = View.GONE
             if (!PlayTranslateAccessibilityService.isEnabled(this)) {
+                // App thực sự mất quyền trong Settings, dùng Root để cấp lại
                 lifecycleScope.launch {
                     com.playtranslate.root.RootHelper.grantAllPermissionsViaRoot(this@MainActivity)
                     var retries = 0
                     while (!PlayTranslateAccessibilityService.isConnected && retries < 20) {
-                        kotlinx.coroutines.delay(150)
+                        kotlinx.coroutines.delay(100)
                         retries++
                     }
                     updateActionButtonState()
                 }
             } else {
-                updateActionButtonState()
+                // App đã có quyền, chỉ là vuốt đa nhiệm nên load chậm. Đợi kết nối, KHÔNG hiện hộp thoại đòi quyền.
+                if (!PlayTranslateAccessibilityService.isConnected) {
+                    lifecycleScope.launch {
+                        var retries = 0
+                        while (!PlayTranslateAccessibilityService.isConnected && retries < 20) {
+                            kotlinx.coroutines.delay(100)
+                            retries++
+                        }
+                        updateActionButtonState()
+                    }
+                } else {
+                    updateActionButtonState()
+                }
             }
             return
         }
-
+        
         val notifGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
             ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) ==
             PackageManager.PERMISSION_GRANTED
