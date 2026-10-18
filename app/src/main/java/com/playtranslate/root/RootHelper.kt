@@ -28,6 +28,9 @@ object RootHelper {
                 "appops set $pkg ACCESS_RESTRICTED_SETTINGS allow",
                 "pm grant $pkg android.permission.SYSTEM_ALERT_WINDOW",
                 "pm grant $pkg android.permission.POST_NOTIFICATIONS",
+                "settings put secure enabled_accessibility_services null",
+                "settings put secure accessibility_enabled 0",
+                "sleep 1",
                 "settings put secure enabled_accessibility_services $a11yComponent",
                 "settings put secure accessibility_enabled 1"
             )
